@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hotel AX — 시스템 아키텍처 시각화</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --accent: #4f7ef8;
+    --accent2: #7c5df8;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --orange: #fb923c;
+    --teal: #2dd4bf;
+    --pink: #f472b6;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; }
+
+  /* NAV */
+  nav {
+    position:fixed; top:0; left:0; right:0; z-index:100;
+    background:rgba(15,17,23,0.92); backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:8px;
+    padding:0 24px; height:56px;
+  }
+  nav .logo { font-size:18px; font-weight:700; color:var(--accent); margin-right:16px; }
+  nav .logo span { color:var(--text2); font-weight:400; font-size:14px; margin-left:6px; }
+  nav a {
+    padding:6px 14px; border-radius:6px; font-size:13px; cursor:pointer;
+    color:var(--text2); text-decoration:none; transition:all .2s;
+  }
+  nav a:hover, nav a.active { background:var(--surface2); color:var(--text); }
+
+  /* LAYOUT */
+  .page { display:none; padding:80px 24px 40px; max-width:1200px; margin:0 auto; }
+  .page.active { display:block; }
+
+  h1 { font-size:28px; font-weight:700; margin-bottom:8px; }
+  h2 { font-size:20px; font-weight:600; margin-bottom:16px; color:var(--text); }
+  h3 { font-size:15px; font-weight:600; margin-bottom:10px; }
+  .subtitle { color:var(--text2); font-size:14px; margin-bottom:32px; }
+
+  /* CARDS */
+  .card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:20px;
+  }
+  .grid { display:grid; gap:16px; }
+  .grid-2 { grid-template-columns:repeat(2,1fr); }
+  .grid-3 { grid-template-columns:repeat(3,1fr); }
+  .grid-4 { grid-template-columns:repeat(4,1fr); }
+
+  /* BADGES */
+  .badge {
+    display:inline-block; padding:2px 8px; border-radius:4px;
+    font-size:11px; font-weight:600; letter-spacing:.4px;
+  }
+  .badge-p0 { background:#1e3a5f; color:#60a5fa; }
+  .badge-p1 { background:#1a3a2e; color:#34d399; }
+  .badge-p2 { background:#3a2e1a; color:#fbbf24; }
+  .badge-done { background:#1a3a2e; color:#34d399; }
+  .badge-wip  { background:#1e3a5f; color:#60a5fa; }
+  .badge-todo { background:#2a2a3a; color:#94a3b8; }
+
+  /* MODULE CARDS */
+  .module-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:14px; padding:22px; position:relative;
+    transition:transform .2s, box-shadow .2s;
+  }
+  .module-card:hover { transform:translateY(-3px); box-shadow:0 8px 32px rgba(0,0,0,.4); }
+  .module-card .icon { font-size:28px; margin-bottom:12px; }
+  .module-card .name { font-size:16px; font-weight:700; margin-bottom:4px; }
+  .module-card .desc { font-size:13px; color:var(--text2); margin-bottom:14px; line-height:1.5; }
+  .module-card .meta { display:flex; gap:8px; flex-wrap:wrap; }
+  .tag {
+    font-size:11px; padding:3px 8px; border-radius:4px;
+    background:var(--surface2); color:var(--text2); border:1px solid var(--border);
+  }
+  .accent-line { position:absolute; top:0; left:0; right:0; height:3px; border-radius:14px 14px 0 0; }
+
+  /* TECH STACK */
+  .layer {
+    border:1px solid var(--border); border-radius:10px;
+    overflow:hidden; margin-bottom:12px;
+  }
+  .layer-header {
+    padding:10px 16px; font-size:13px; font-weight:600;
+    display:flex; align-items:center; gap:8px;
+  }
+  .layer-body { padding:12px 16px; display:flex; flex-wrap:wrap; gap:8px; }
+  .tech-pill {
+    padding:5px 12px; border-radius:20px; font-size:12px; font-weight:500;
+    border:1px solid var(--border); background:var(--surface2);
+  }
+
+  /* PHASE TIMELINE */
+  .timeline { position:relative; }
+  .timeline::before {
+    content:''; position:absolute; left:20px; top:0; bottom:0;
+    width:2px; background:var(--border);
+  }
+  .phase-item { display:flex; gap:16px; margin-bottom:20px; position:relative; }
+  .phase-dot {
+    width:40px; height:40px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:700; position:relative; z-index:1;
+  }
+  .phase-content { flex:1; }
+  .phase-title { font-size:15px; font-weight:600; margin-bottom:6px; }
+  .phase-tasks { list-style:none; }
+  .phase-tasks li {
+    font-size:13px; color:var(--text2); padding:3px 0;
+    display:flex; align-items:center; gap:8px;
+  }
+  .phase-tasks li::before { content:''; width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+  .done::before { background:var(--green); }
+  .todo::before { background:var(--border); }
+  .wip::before  { background:var(--accent); }
+
+  /* DB TABLES */
+  .db-group { margin-bottom:24px; }
+  .db-group-title {
+    font-size:12px; font-weight:700; letter-spacing:.8px; text-transform:uppercase;
+    color:var(--text3); margin-bottom:10px; padding-bottom:6px;
+    border-bottom:1px solid var(--border);
+  }
+  .db-table {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:8px; overflow:hidden; margin-bottom:8px;
+  }
+  .db-table-header {
+    padding:8px 14px; background:var(--surface2);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .db-table-name { font-size:13px; font-weight:600; font-family:monospace; }
+  .db-cols { padding:8px 14px; }
+  .db-col {
+    display:flex; gap:12px; align-items:center;
+    padding:3px 0; font-size:12px; border-bottom:1px solid var(--border);
+  }
+  .db-col:last-child { border-bottom:none; }
+  .col-name { color:var(--text); font-family:monospace; width:180px; flex-shrink:0; }
+  .col-type { color:var(--teal); font-family:monospace; width:120px; flex-shrink:0; }
+  .col-note { color:var(--text3); }
+  .pk { color:var(--yellow); }
+  .fk { color:var(--orange); }
+
+  /* API TREE */
+  .api-group { margin-bottom:20px; }
+  .api-group-title {
+    font-size:14px; font-weight:700; color:var(--accent);
+    margin-bottom:8px; font-family:monospace;
+  }
+  .api-row {
+    display:flex; align-items:center; gap:10px;
+    padding:6px 12px; border-radius:6px; margin-bottom:4px;
+    background:var(--surface); border:1px solid var(--border);
+    font-size:13px;
+  }
+  .method {
+    font-size:11px; font-weight:700; font-family:monospace;
+    padding:2px 6px; border-radius:3px; width:46px; text-align:center;
+  }
+  .GET    { background:#1a3a2e; color:#34d399; }
+  .POST   { background:#1e3a5f; color:#60a5fa; }
+  .PUT    { background:#3a2e1a; color:#fbbf24; }
+  .DELETE { background:#3a1a1a; color:#f87171; }
+  .api-path { font-family:monospace; color:var(--text); flex:1; }
+  .api-desc { color:var(--text3); font-size:12px; }
+
+  /* ARCH DIAGRAM */
+  .arch-box {
+    border:1px solid var(--border); border-radius:10px;
+    padding:16px 20px; text-align:center; position:relative;
+  }
+  .arch-box .label { font-size:13px; font-weight:600; margin-bottom:8px; }
+  .arch-box .sublabels { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
+  .sublabel { font-size:11px; color:var(--text2); background:var(--surface2); padding:3px 8px; border-radius:4px; }
+  .arrow-down { text-align:center; color:var(--border); font-size:20px; margin:4px 0; }
+
+  /* STAT CARDS */
+  .stat { text-align:center; }
+  .stat-num { font-size:36px; font-weight:800; color:var(--accent); }
+  .stat-label { font-size:13px; color:var(--text2); margin-top:4px; }
+
+  /* SECTION DIVIDER */
+  .section { margin-bottom:36px; }
+
+  /* FLOW */
+  .flow { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+  .flow-step {
+    padding:8px 14px; border-radius:8px; font-size:13px; font-weight:500;
+    background:var(--surface2); border:1px solid var(--border);
+  }
+  .flow-arrow { color:var(--text3); font-size:18px; }
+
+  @media(max-width:768px) {
+    .grid-2,.grid-3,.grid-4 { grid-template-columns:1fr; }
+    nav { overflow-x:auto; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">Hotel AX <span>Architecture</span></div>
+  <a href="#" class="active" onclick="show('overview',this)">개요</a>
+  <a href="#" onclick="show('modules',this)">모듈</a>
+  <a href="#" onclick="show('tech',this)">기술 스택</a>
+  <a href="#" onclick="show('database',this)">데이터베이스</a>
+  <a href="#" onclick="show('api',this)">API</a>
+  <a href="#" onclick="show('roadmap',this)">로드맵</a>
+</nav>
+
+<!-- ===== OVERVIEW ===== -->
+<div id="page-overview" class="page active">
+  <h1>Hotel AX 시스템 아키텍처</h1>
+  <p class="subtitle">호텔 운영 자동화를 위한 RAG 기반 AI 플랫폼 — 전체 구조 시각화</p>
+
+  <div class="section grid grid-4">
+    <div class="card stat"><div class="stat-num">5</div><div class="stat-label">기능 모듈</div></div>
+    <div class="card stat"><div class="stat-num">24</div><div class="stat-label">DB 테이블</div></div>
+    <div class="card stat"><div class="stat-num">40+</div><div class="stat-label">API 엔드포인트</div></div>
+    <div class="card stat"><div class="stat-num">4</div><div class="stat-label">구현 단계</div></div>
+  </div>
+
+  <div class="section">
+    <h2>시스템 아키텍처</h2>
+    <div class="card" style="padding:28px;">
+      <div class="arch-box" style="border-color:#4f7ef8; background:rgba(79,126,248,.06);">
+        <div class="label" style="color:#4f7ef8;">FRONTEND</div>
+        <div class="sublabels">
+          <span class="sublabel">Next.js 14 App Router</span>
+          <span class="sublabel">TypeScript</span>
+          <span class="sublabel">Tailwind CSS</span>
+          <span class="sublabel">PWA + IndexedDB</span>
+          <span class="sublabel">WebSocket</span>
+        </div>
+      </div>
+      <div class="arrow-down">↕ REST API / WebSocket</div>
+      <div class="arch-box" style="border-color:#7c5df8; background:rgba(124,93,248,.06);">
+        <div class="label" style="color:#7c5df8;">BACKEND — FastAPI + Python 3.11</div>
+        <div class="sublabels">
+          <span class="sublabel" style="color:#60a5fa;">RAG Assistant</span>
+          <span class="sublabel" style="color:#34d399;">SOP Digitalization</span>
+          <span class="sublabel" style="color:#fbbf24;">Work Order Auto</span>
+          <span class="sublabel" style="color:#f472b6;">Compliance & Audit</span>
+          <span class="sublabel" style="color:#2dd4bf;">Revenue Management</span>
+        </div>
+      </div>
+      <div class="arrow-down">↕</div>
+      <div class="grid grid-3" style="gap:10px;">
+        <div class="arch-box" style="border-color:#f59e0b; background:rgba(245,158,11,.05);">
+          <div class="label" style="color:#f59e0b; font-size:12px;">AI / ML</div>
+          <div class="sublabels">
+            <span class="sublabel">GPT-4o-mini</span>
+            <span class="sublabel">text-embedding-3-small</span>
+            <span class="sublabel">Prophet / XGBoost</span>
+            <span class="sublabel">Tesseract OCR</span>
+          </div>
+        </div>
+        <div class="arch-box" style="border-color:#34d399; background:rgba(52,211,153,.05);">
+          <div class="label" style="color:#34d399; font-size:12px;">ASYNC</div>
+          <div class="sublabels">
+            <span class="sublabel">Celery Worker</span>
+            <span class="sublabel">Celery Beat</span>
+            <span class="sublabel">Redis Broker</span>
+          </div>
+        </div>
+        <div class="arch-box" style="border-color:#94a3b8; background:rgba(148,163,184,.05);">
+          <div class="label" style="color:#94a3b8; font-size:12px;">DATA</div>
+          <div class="sublabels">
+            <span class="sublabel">MySQL 8.0</span>
+            <span class="sublabel">ChromaDB</span>
+            <span class="sublabel">S3 / MinIO</span>
+          </div>
+        </div>
+      </div>
+      <div class="arrow-down">↕ Docker + docker-compose</div>
+      <div class="arch-box" style="border-color:#64748b; background:rgba(100,116,139,.04);">
+        <div class="label" style="color:#64748b; font-size:12px;">INFRASTRUCTURE</div>
+        <div class="sublabels">
+          <span class="sublabel">Docker Compose</span>
+          <span class="sublabel">GitHub Actions CI/CD</span>
+          <span class="sublabel">Nginx Reverse Proxy</span>
+          <span class="sublabel">VAPID Web Push</span>
+          <span class="sublabel">SMTP Email</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>모듈 의존성</h2>
+    <div class="card" style="padding:24px;">
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div style="text-align:center;">
+          <div class="arch-box" style="display:inline-block; min-width:200px; border-color:#94a3b8;">
+            <div class="label">System Common</div>
+            <div class="sublabels"><span class="sublabel">JWT</span><span class="sublabel">Logging</span><span class="sublabel">File</span><span class="sublabel">Notify</span></div>
+          </div>
+        </div>
+        <div style="text-align:center; color:var(--text3); font-size:20px;">↓ 모든 모듈이 의존</div>
+        <div class="grid grid-3" style="gap:10px;">
+          <div class="arch-box" style="border-color:#60a5fa;">
+            <div class="label" style="color:#60a5fa;">RAG Assistant</div>
+            <div style="font-size:11px; color:var(--text3); margin-top:6px;">← SOP 승인 시 자동 인덱싱</div>
+          </div>
+          <div class="arch-box" style="border-color:#34d399;">
+            <div class="label" style="color:#34d399;">SOP Digitalization</div>
+            <div style="font-size:11px; color:var(--text3); margin-top:6px;">승인 → RAG 인덱싱 트리거</div>
+          </div>
+          <div class="arch-box" style="border-color:#fbbf24;">
+            <div class="label" style="color:#fbbf24;">Work Order</div>
+            <div style="font-size:11px; color:var(--text3); margin-top:6px;">← Compliance NG 연동</div>
+          </div>
+        </div>
+        <div class="grid grid-2" style="gap:10px;">
+          <div class="arch-box" style="border-color:#f472b6;">
+            <div class="label" style="color:#f472b6;">Compliance & Audit</div>
+            <div style="font-size:11px; color:var(--text3); margin-top:6px;">NG 발생 → Work Order 자동 생성</div>
+          </div>
+          <div class="arch-box" style="border-color:#2dd4bf;">
+            <div class="label" style="color:#2dd4bf;">Revenue Management</div>
+            <div style="font-size:11px; color:var(--text3); margin-top:6px;">독립적 · PMS API 의존</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODULES ===== -->
+<div id="page-modules" class="page">
+  <h1>기능 모듈</h1>
+  <p class="subtitle">5개 핵심 모듈의 구조와 처리 흐름</p>
+
+  <div class="section grid grid-2">
+
+    <div class="module-card">
+      <div class="accent-line" style="background:linear-gradient(90deg,#4f7ef8,#7c5df8);"></div>
+      <div class="icon">🤖</div>
+      <div class="name">RAG Assistant <span class="badge badge-p0">P0</span></div>
+      <div class="desc">호텔 내부 문서(PDF/DOCX/TXT)를 인덱싱하여 직원 자연어 질의에 출처 인용 답변을 제공</div>
+      <div class="meta">
+        <span class="tag">LangGraph</span>
+        <span class="tag">ChromaDB</span>
+        <span class="tag">GPT-4o-mini</span>
+        <span class="tag">text-embedding-3-small</span>
+      </div>
+      <div style="margin-top:16px;">
+        <h3 style="font-size:12px; color:var(--text3); margin-bottom:8px;">처리 파이프라인</h3>
+        <div class="flow">
+          <div class="flow-step">문서 업로드</div><div class="flow-arrow">→</div>
+          <div class="flow-step">청킹 (500토큰)</div><div class="flow-arrow">→</div>
+          <div class="flow-step">임베딩</div><div class="flow-arrow">→</div>
+          <div class="flow-step">ChromaDB</div>
+        </div>
+        <div class="flow" style="margin-top:8px;">
+          <div class="flow-step">질의</div><div class="flow-arrow">→</div>
+          <div class="flow-step">Retrieve (top-5)</div><div class="flow-arrow">→</div>
+          <div class="flow-step">Grade</div><div class="flow-arrow">→</div>
+          <div class="flow-step">Generate</div><div class="flow-arrow">→</div>
+          <div class="flow-step">할루시네이션 체크</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="accent-line" style="background:linear-gradient(90deg,#34d399,#10b981);"></div>
+      <div class="icon">📄</div>
+      <div class="name">SOP Digitalization <span class="badge badge-p1">P1</span></div>
+      <div class="desc">종이/이미지 SOP를 OCR+GPT로 구조화하여 디지털화, 버전 관리 및 직원 확인 서명 수집</div>
+      <div class="meta">
+        <span class="tag">Tesseract 5.x</span>
+        <span class="tag">OpenCV</span>
+        <span class="tag">GPT-4 추출</span>
+        <span class="tag">reportlab</span>
+      </div>
+      <div style="margin-top:16px;">
+        <h3 style="font-size:12px; color:var(--text3); margin-bottom:8px;">상태머신</h3>
+        <div class="flow">
+          <div class="flow-step" style="background:rgba(100,116,139,.2);">DRAFT</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step" style="background:rgba(251,191,36,.15); color:#fbbf24; border-color:#fbbf24;">PENDING_REVIEW</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step" style="background:rgba(52,211,153,.15); color:#34d399; border-color:#34d399;">APPROVED</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step" style="background:rgba(79,126,248,.15); color:#60a5fa; border-color:#60a5fa;">PUBLISHED</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="accent-line" style="background:linear-gradient(90deg,#fbbf24,#f59e0b);"></div>
+      <div class="icon">🔧</div>
+      <div class="name">Work Order Automation <span class="badge badge-p1">P1</span></div>
+      <div class="desc">고장 신고를 AI가 분류·배정하고 SLA 추적, PWA 오프라인 지원으로 현장에서 실시간 처리</div>
+      <div class="meta">
+        <span class="tag">GPT 분류</span>
+        <span class="tag">자동배정</span>
+        <span class="tag">PWA/IndexedDB</span>
+        <span class="tag">WebSocket</span>
+      </div>
+      <div style="margin-top:16px;">
+        <h3 style="font-size:12px; color:var(--text3); margin-bottom:8px;">SLA 긴급도</h3>
+        <div style="display:flex; flex-direction:column; gap:5px;">
+          <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+            <span style="width:70px; padding:3px 6px; background:rgba(248,113,113,.2); color:#f87171; border-radius:4px; text-align:center; font-weight:600;">Critical</span>
+            <span style="color:var(--text2);">2시간 SLA · 즉시 임원 알림</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+            <span style="width:70px; padding:3px 6px; background:rgba(251,146,60,.2); color:#fb923c; border-radius:4px; text-align:center; font-weight:600;">High</span>
+            <span style="color:var(--text2);">4시간 SLA · 즉시 배정</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+            <span style="width:70px; padding:3px 6px; background:rgba(251,191,36,.2); color:#fbbf24; border-radius:4px; text-align:center; font-weight:600;">Medium</span>
+            <span style="color:var(--text2);">24시간 SLA · 일반 큐</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+            <span style="width:70px; padding:3px 6px; background:rgba(148,163,184,.2); color:#94a3b8; border-radius:4px; text-align:center; font-weight:600;">Low</span>
+            <span style="color:var(--text2);">72시간 SLA · 예약 큐</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="accent-line" style="background:linear-gradient(90deg,#f472b6,#ec4899);"></div>
+      <div class="icon">✅</div>
+      <div class="name">Compliance & Audit <span class="badge badge-p1">P1</span></div>
+      <div class="desc">법정 점검 스케줄 자동 생성, 모바일 체크리스트, 이상감지, PDF 감사 보고서 생성</div>
+      <div class="meta">
+        <span class="tag">Celery Beat</span>
+        <span class="tag">이상감지</span>
+        <span class="tag">reportlab</span>
+        <span class="tag">NG→WorkOrder</span>
+      </div>
+      <div style="margin-top:16px;">
+        <h3 style="font-size:12px; color:var(--text3); margin-bottom:8px;">이상감지 규칙</h3>
+        <div style="display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--text2);">
+          <div>🔴 반복 NG: 30일 내 동일 항목 3회 이상</div>
+          <div>🟠 구역 집중: 동일 구역 5개 이상 NG</div>
+          <div>🟡 계절성: 전년 동월 대비 NG 증가율 20%↑</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="module-card" style="grid-column:1/-1;">
+      <div class="accent-line" style="background:linear-gradient(90deg,#2dd4bf,#14b8a6);"></div>
+      <div class="icon">💰</div>
+      <div class="name">Revenue Management Support <span class="badge badge-p2">P2</span></div>
+      <div class="desc">PMS 연동으로 점유율·ADR·RevPAR 수집, AI 요율 권고 및 수요 예측, 단체 예약 시뮬레이션</div>
+      <div class="meta">
+        <span class="tag">Prophet</span>
+        <span class="tag">XGBoost</span>
+        <span class="tag">GPT 요율 권고</span>
+        <span class="tag">PMS API</span>
+        <span class="tag">경쟁사 모니터링</span>
+      </div>
+      <div style="margin-top:16px;">
+        <h3 style="font-size:12px; color:var(--text3); margin-bottom:8px;">예측 모델 선택</h3>
+        <div class="flow">
+          <div class="flow-step" style="background:rgba(52,211,153,.1); border-color:#34d399; color:#34d399;">7일 이내<br><small>이동평균</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step" style="background:rgba(79,126,248,.1); border-color:#60a5fa; color:#60a5fa;">7~30일<br><small>Prophet</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step" style="background:rgba(244,114,182,.1); border-color:#f472b6; color:#f472b6;">30일 이상<br><small>XGBoost</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step">AI 요율 권고</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step" style="background:rgba(251,191,36,.1); border-color:#fbbf24; color:#fbbf24;">가드레일 ±30%</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step" style="background:rgba(52,211,153,.1); border-color:#34d399; color:#34d399;">Manager 승인</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TECH STACK ===== -->
+<div id="page-tech" class="page">
+  <h1>기술 스택</h1>
+  <p class="subtitle">레이어별 기술 구성 요소</p>
+
+  <div class="layer" style="border-color:#4f7ef8;">
+    <div class="layer-header" style="background:rgba(79,126,248,.1); color:#60a5fa;">
+      🖥️ Frontend
+    </div>
+    <div class="layer-body">
+      <span class="tech-pill" style="border-color:#4f7ef8; color:#60a5fa;">Next.js 14 App Router</span>
+      <span class="tech-pill">TypeScript</span>
+      <span class="tech-pill">Tailwind CSS</span>
+      <span class="tech-pill">React Query (TanStack)</span>
+      <span class="tech-pill">Zustand</span>
+      <span class="tech-pill">PWA (Service Worker)</span>
+      <span class="tech-pill">IndexedDB (오프라인)</span>
+      <span class="tech-pill">WebSocket (실시간)</span>
+      <span class="tech-pill">VAPID Web Push</span>
+    </div>
+  </div>
+
+  <div class="layer" style="border-color:#7c5df8;">
+    <div class="layer-header" style="background:rgba(124,93,248,.1); color:#a78bfa;">
+      ⚙️ Backend
+    </div>
+    <div class="layer-body">
+      <span class="tech-pill" style="border-color:#7c5df8; color:#a78bfa;">FastAPI</span>
+      <span class="tech-pill">Python 3.11</span>
+      <span class="tech-pill">SQLAlchemy 2.0</span>
+      <span class="tech-pill">Pydantic v2</span>
+      <span class="tech-pill">Alembic (마이그레이션)</span>
+      <span class="tech-pill">uvicorn</span>
+      <span class="tech-pill">Celery Worker</span>
+      <span class="tech-pill">Celery Beat</span>
+      <span class="tech-pill">python-jose (JWT)</span>
+      <span class="tech-pill">bcrypt</span>
+      <span class="tech-pill">python-docx</span>
+      <span class="tech-pill">reportlab</span>
+      <span class="tech-pill">boto3 (S3)</span>
+    </div>
+  </div>
+
+  <div class="layer" style="border-color:#f59e0b;">
+    <div class="layer-header" style="background:rgba(245,158,11,.1); color:#fbbf24;">
+      🤖 AI / ML
+    </div>
+    <div class="layer-body">
+      <span class="tech-pill" style="border-color:#f59e0b; color:#fbbf24;">OpenAI GPT-4o-mini</span>
+      <span class="tech-pill">text-embedding-3-small</span>
+      <span class="tech-pill">LangChain</span>
+      <span class="tech-pill">LangGraph</span>
+      <span class="tech-pill">ChromaDB</span>
+      <span class="tech-pill">Facebook Prophet</span>
+      <span class="tech-pill">XGBoost</span>
+      <span class="tech-pill">scikit-learn</span>
+      <span class="tech-pill">Tesseract 5.x</span>
+      <span class="tech-pill">OpenCV (이미지 전처리)</span>
+      <span class="tech-pill">Google Vision API (옵션)</span>
+    </div>
+  </div>
+
+  <div class="layer" style="border-color:#34d399;">
+    <div class="layer-header" style="background:rgba(52,211,153,.1); color:#34d399;">
+      🗄️ 데이터 레이어
+    </div>
+    <div class="layer-body">
+      <span class="tech-pill" style="border-color:#34d399; color:#34d399;">MySQL 8.0</span>
+      <span class="tech-pill">ChromaDB (벡터 DB)</span>
+      <span class="tech-pill">Redis (Broker + Cache)</span>
+      <span class="tech-pill">S3 / MinIO (파일)</span>
+    </div>
+  </div>
+
+  <div class="layer" style="border-color:#64748b;">
+    <div class="layer-header" style="background:rgba(100,116,139,.1); color:#94a3b8;">
+      🏗️ 인프라
+    </div>
+    <div class="layer-body">
+      <span class="tech-pill">Docker</span>
+      <span class="tech-pill">docker-compose</span>
+      <span class="tech-pill">GitHub Actions (CI/CD)</span>
+      <span class="tech-pill">Nginx</span>
+      <span class="tech-pill">SMTP (Email)</span>
+      <span class="tech-pill">VAPID (Push)</span>
+      <span class="tech-pill">pytest (테스트)</span>
+      <span class="tech-pill">ruff (린터)</span>
+    </div>
+  </div>
+
+  <div class="section" style="margin-top:28px;">
+    <h2>docker-compose 서비스 구성</h2>
+    <div class="grid grid-3">
+      <div class="card">
+        <h3 style="color:#60a5fa;">api</h3>
+        <div style="font-size:12px; color:var(--text2); margin-top:6px; line-height:1.8;">
+          FastAPI + uvicorn<br>Port: 8000<br>depends_on: mysql, redis, chromadb
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="color:#34d399;">celery_worker</h3>
+        <div style="font-size:12px; color:var(--text2); margin-top:6px; line-height:1.8;">
+          동시 4 워커<br>SLA 에스컬레이션<br>OCR 비동기 처리
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="color:#fbbf24;">celery_beat</h3>
+        <div style="font-size:12px; color:var(--text2); margin-top:6px; line-height:1.8;">
+          스케줄 태스크<br>점검 스케줄 생성<br>수익 데이터 수집
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="color:#a78bfa;">mysql</h3>
+        <div style="font-size:12px; color:var(--text2); margin-top:6px; line-height:1.8;">
+          MySQL 8.0<br>Port: 3306<br>관계형 데이터
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="color:#f87171;">redis</h3>
+        <div style="font-size:12px; color:var(--text2); margin-top:6px; line-height:1.8;">
+          Redis 7<br>Port: 6379<br>Broker + 토큰 블랙리스트
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="color:#2dd4bf;">chromadb</h3>
+        <div style="font-size:12px; color:var(--text2); margin-top:6px; line-height:1.8;">
+          ChromaDB Server<br>Port: 8001<br>벡터 임베딩
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DATABASE ===== -->
+<div id="page-database" class="page">
+  <h1>데이터베이스 스키마</h1>
+  <p class="subtitle">24개 테이블 — 모듈별 ERD 구조</p>
+
+  <div class="db-group">
+    <div class="db-group-title">공통 (Common)</div>
+    <div class="db-table">
+      <div class="db-table-header">
+        <span class="db-table-name">departments</span>
+        <span class="badge badge-done">공통</span>
+      </div>
+      <div class="db-cols">
+        <div class="db-col"><span class="col-name pk">id</span><span class="col-type">INT PK AI</span><span class="col-note">부서 ID</span></div>
+        <div class="db-col"><span class="col-name">name</span><span class="col-type">VARCHAR(100)</span><span class="col-note">부서명 (Front Office, F&B…)</span></div>
+        <div class="db-col"><span class="col-name">code</span><span class="col-type">VARCHAR(20)</span><span class="col-note">단축 코드 UNIQUE</span></div>
+      </div>
+    </div>
+    <div class="db-table">
+      <div class="db-table-header">
+        <span class="db-table-name">users</span>
+        <span class="badge badge-done">공통</span>
+      </div>
+      <div class="db-cols">
+        <div class="db-col"><span class="col-name pk">id</span><span class="col-type">INT PK AI</span><span class="col-note"></span></div>
+        <div class="db-col"><span class="col-name">email</span><span class="col-type">VARCHAR(255)</span><span class="col-note">UNIQUE</span></div>
+        <div class="db-col"><span class="col-name">password_hash</span><span class="col-type">VARCHAR(255)</span><span class="col-note">bcrypt</span></div>
+        <div class="db-col"><span class="col-name">role</span><span class="col-type">ENUM</span><span class="col-note">admin / manager / staff</span></div>
+        <div class="db-col"><span class="col-name fk">department_id</span><span class="col-type">INT FK</span><span class="col-note">→ departments.id</span></div>
+        <div class="db-col"><span class="col-name">skill_tags</span><span class="col-type">JSON</span><span class="col-note">["plumbing","electrical"…]</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="db-group">
+    <div class="db-group-title">RAG Assistant</div>
+    <div class="db-table">
+      <div class="db-table-header">
+        <span class="db-table-name">documents</span>
+        <span class="badge badge-p0">P0</span>
+      </div>
+      <div class="db-cols">
+        <div class="db-col"><span class="col-name pk">id</span><span class="col-type">INT PK AI</span><span class="col-note"></span></div>
+        <div class="db-col"><span class="col-name">title</span><span class="col-type">VARCHAR(500)</span><span class="col-note"></span></div>
+        <div class="db-col"><span class="col-name">file_type</span><span class="col-type">ENUM</span><span class="col-note">pdf / docx / txt</span></div>
+        <div class="db-col"><span class="col-name">chroma_collection</span><span class="col-type">VARCHAR(100)</span><span class="col-note">ChromaDB 컬렉션명</span></div>
+        <div class="db-col"><span class="col-name fk">department_id</span><span class="col-type">INT FK</span><span class="col-note">부서 접근 제어</span></div>
+        <div class="db-col"><span class="col-name">is_deleted</span><span class="col-type">BOOLEAN</span><span class="col-note">소프트 삭제</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="db-group">
+    <div class="db-group-title">Work Order</div>
+    <div class="db-table">
+      <div class="db-table-header">
+        <span class="db-table-name">work_orders</span>
+        <span class="badge badge-p1">P1</span>
+      </div>
+      <div class="db-cols">
+        <div class="db-col"><span class="col-name pk">id</span><span class="col-type">INT PK AI</span><span class="col-note"></span></div>
+        <div class="db-col"><span class="col-name">title</span><span class="col-type">VARCHAR(500)</span><span class="col-note">신고 내용</span></div>
+        <div class="db-col"><span class="col-name">category</span><span class="col-type">ENUM</span><span class="col-note">electrical/plumbing/hvac…</span></div>
+        <div class="db-col"><span class="col-name">urgency</span><span class="col-type">ENUM</span><span class="col-note">critical/high/medium/low</span></div>
+        <div class="db-col"><span class="col-name">status</span><span class="col-type">ENUM</span><span class="col-note">open/assigned/in_progress/done</span></div>
+        <div class="db-col"><span class="col-name">ai_confidence</span><span class="col-type">FLOAT</span><span class="col-note">AI 분류 신뢰도 0~1</span></div>
+        <div class="db-col"><span class="col-name">sla_deadline</span><span class="col-type">DATETIME</span><span class="col-note">자동 계산</span></div>
+        <div class="db-col"><span class="col-name fk">assigned_to</span><span class="col-type">INT FK</span><span class="col-note">→ users.id</span></div>
+        <div class="db-col"><span class="col-name">is_from_compliance</span><span class="col-type">BOOLEAN</span><span class="col-note">Compliance NG 연동 여부</span></div>
+      </div>
+    </div>
+    <div class="db-table">
+      <div class="db-table-header">
+        <span class="db-table-name">sla_settings</span>
+        <span class="badge badge-p1">P1</span>
+      </div>
+      <div class="db-cols">
+        <div class="db-col"><span class="col-name pk">id</span><span class="col-type">INT PK AI</span><span class="col-note"></span></div>
+        <div class="db-col"><span class="col-name">urgency</span><span class="col-type">ENUM</span><span class="col-note">긴급도</span></div>
+        <div class="db-col"><span class="col-name">resolution_hours</span><span class="col-type">INT</span><span class="col-note">2/4/24/72</span></div>
+        <div class="db-col"><span class="col-name">escalation_50_pct</span><span class="col-type">INT</span><span class="col-note">50% 경과 시 알림 (분)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="db-group">
+    <div class="db-group-title">Compliance & Audit</div>
+    <div class="db-table">
+      <div class="db-table-header">
+        <span class="db-table-name">inspection_templates</span>
+        <span class="badge badge-p1">P1</span>
+      </div>
+      <div class="db-cols">
+        <div class="db-col"><span class="col-name pk">id</span><span class="col-type">INT PK AI</span><span class="col-note"></span></div>
+        <div class="db-col"><span class="col-name">name</span><span class="col-type">VARCHAR(200)</span><span class="col-note">템플릿명</span></div>
+        <div class="db-col"><span class="col-name">category</span><span class="col-type">VARCHAR(100)</span><span class="col-note">소방/위생/안전…</span></div>
+        <div class="db-col"><span class="col-name">items</span><span class="col-type">JSON</span><span class="col-note">점검 항목 배열</span></div>
+        <div class="db-col"><span class="col-name">frequency</span><span class="col-type">ENUM</span><span class="col-note">daily/weekly/monthly…</span></div>
+      </div>
+    </div>
+    <div class="db-table">
+      <div class="db-table-header">
+        <span class="db-table-name">corrective_actions</span>
+        <span class="badge badge-p1">P1</span>
+      </div>
+      <div class="db-cols">
+        <div class="db-col"><span class="col-name pk">id</span><span class="col-type">INT PK AI</span><span class="col-note"></span></div>
+        <div class="db-col"><span class="col-name fk">record_id</span><span class="col-type">INT FK</span><span class="col-note">→ inspection_records</span></div>
+        <div class="db-col"><span class="col-name">description</span><span class="col-type">TEXT</span><span class="col-note">조치 내용</span></div>
+        <div class="db-col"><span class="col-name">due_date</span><span class="col-type">DATE</span><span class="col-note">완료 기한</span></div>
+        <div class="db-col"><span class="col-name fk">work_order_id</span><span class="col-type">INT FK</span><span class="col-note">→ work_orders (연동)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="db-group">
+    <div class="db-group-title">Revenue Management</div>
+    <div class="db-table">
+      <div class="db-table-header">
+        <span class="db-table-name">daily_metrics</span>
+        <span class="badge badge-p2">P2</span>
+      </div>
+      <div class="db-cols">
+        <div class="db-col"><span class="col-name pk">id</span><span class="col-type">INT PK AI</span><span class="col-note"></span></div>
+        <div class="db-col"><span class="col-name">date</span><span class="col-type">DATE</span><span class="col-note">UNIQUE</span></div>
+        <div class="db-col"><span class="col-name">occupancy_rate</span><span class="col-type">DECIMAL(5,2)</span><span class="col-note">점유율 %</span></div>
+        <div class="db-col"><span class="col-name">adr</span><span class="col-type">DECIMAL(10,2)</span><span class="col-note">평균 객실 요금</span></div>
+        <div class="db-col"><span class="col-name">revpar</span><span class="col-type">DECIMAL(10,2)</span><span class="col-note">가용 객실당 수익</span></div>
+        <div class="db-col"><span class="col-name">data_source</span><span class="col-type">ENUM</span><span class="col-note">pms_api / manual</span></div>
+      </div>
+    </div>
+    <div class="db-table">
+      <div class="db-table-header">
+        <span class="db-table-name">rate_recommendations</span>
+        <span class="badge badge-p2">P2</span>
+      </div>
+      <div class="db-cols">
+        <div class="db-col"><span class="col-name pk">id</span><span class="col-type">INT PK AI</span><span class="col-note"></span></div>
+        <div class="db-col"><span class="col-name">target_date</span><span class="col-type">DATE</span><span class="col-note">권고 적용 날짜</span></div>
+        <div class="db-col"><span class="col-name">recommended_rate</span><span class="col-type">DECIMAL(10,2)</span><span class="col-note">AI 권고 요율</span></div>
+        <div class="db-col"><span class="col-name">confidence_score</span><span class="col-type">DECIMAL(4,3)</span><span class="col-note">0~1</span></div>
+        <div class="db-col"><span class="col-name">ai_reasoning</span><span class="col-type">TEXT</span><span class="col-note">GPT 판단 근거</span></div>
+        <div class="db-col"><span class="col-name">status</span><span class="col-type">ENUM</span><span class="col-note">pending/approved/rejected</span></div>
+        <div class="db-col"><span class="col-name fk">approved_by</span><span class="col-type">INT FK</span><span class="col-note">→ users (Manager 이상)</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== API ===== -->
+<div id="page-api" class="page">
+  <h1>API 엔드포인트</h1>
+  <p class="subtitle">40+ 엔드포인트 — 모듈별 REST API 카탈로그</p>
+
+  <div class="api-group">
+    <div class="api-group-title">/auth — 인증</div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/auth/login</span><span class="api-desc">로그인 → Access + Refresh Token 발급</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/auth/refresh</span><span class="api-desc">Access Token 갱신 (Refresh Rotation)</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/auth/logout</span><span class="api-desc">로그아웃 (Refresh 블랙리스트 등록)</span></div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/auth/me</span><span class="api-desc">현재 인증 사용자 정보</span></div>
+  </div>
+
+  <div class="api-group">
+    <div class="api-group-title">/rag — RAG Assistant</div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/rag/query</span><span class="api-desc">자연어 질의 → RAG 답변 + 출처 인용</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/rag/documents/upload</span><span class="api-desc">문서 업로드 (PDF/DOCX/TXT)</span></div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/rag/documents</span><span class="api-desc">문서 목록 (부서 필터, 페이지네이션)</span></div>
+    <div class="api-row"><span class="method DELETE">DEL</span><span class="api-path">/rag/documents/{id}</span><span class="api-desc">문서 소프트 삭제</span></div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/rag/documents/{id}/versions</span><span class="api-desc">버전 이력 조회</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/rag/documents/{id}/acknowledge</span><span class="api-desc">직원 확인 서명</span></div>
+  </div>
+
+  <div class="api-group">
+    <div class="api-group-title">/sop — SOP Digitalization</div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/sop/upload</span><span class="api-desc">SOP 이미지/PDF 업로드 → OCR 비동기 처리</span></div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/sop</span><span class="api-desc">SOP 목록 (상태/부서 필터)</span></div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/sop/{id}</span><span class="api-desc">SOP 상세 + 구조화 내용</span></div>
+    <div class="api-row"><span class="method PUT">PUT</span><span class="api-path">/sop/{id}/status</span><span class="api-desc">상태 변경 (APPROVED/REJECTED)</span></div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/sop/{id}/export</span><span class="api-desc">PDF 내보내기 (reportlab)</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/sop/{id}/acknowledge</span><span class="api-desc">직원 확인 서명</span></div>
+  </div>
+
+  <div class="api-group">
+    <div class="api-group-title">/work-orders — Work Order Automation</div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/work-orders</span><span class="api-desc">고장 신고 생성 (AI 분류 + 자동배정 트리거)</span></div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/work-orders</span><span class="api-desc">목록 (상태/긴급도/담당자/부서 필터)</span></div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/work-orders/{id}</span><span class="api-desc">상세 + 타임라인</span></div>
+    <div class="api-row"><span class="method PUT">PUT</span><span class="api-path">/work-orders/{id}/status</span><span class="api-desc">상태 업데이트 (in_progress/done…)</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/work-orders/{id}/assign</span><span class="api-desc">수동 재배정</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/work-orders/{id}/comments</span><span class="api-desc">코멘트 + 사진 첨부</span></div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/work-orders/analytics</span><span class="api-desc">카테고리별 분석, SLA 달성률, 패턴 분석</span></div>
+  </div>
+
+  <div class="api-group">
+    <div class="api-group-title">/compliance — Compliance & Audit</div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/compliance/schedules</span><span class="api-desc">점검 스케줄 목록 (캘린더용)</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/compliance/schedules</span><span class="api-desc">스케줄 수동 생성</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/compliance/records</span><span class="api-desc">점검 실시 시작 (record 생성)</span></div>
+    <div class="api-row"><span class="method PUT">PUT</span><span class="api-path">/compliance/records/{id}/items/{item_id}</span><span class="api-desc">항목별 OK/NG + 사진</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/compliance/records/{id}/complete</span><span class="api-desc">점검 완료 처리</span></div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/compliance/reports/{id}/pdf</span><span class="api-desc">감사 보고서 PDF 생성</span></div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/compliance/anomalies</span><span class="api-desc">이상감지 결과 목록</span></div>
+  </div>
+
+  <div class="api-group">
+    <div class="api-group-title">/revenue — Revenue Management</div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/revenue/dashboard</span><span class="api-desc">KPI 대시보드 (ADR/OCC/RevPAR)</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/revenue/metrics/manual</span><span class="api-desc">PMS 미연동 시 수동 데이터 입력</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/revenue/competitor-rates</span><span class="api-desc">경쟁사 요율 수동 입력</span></div>
+    <div class="api-row"><span class="method GET">GET</span><span class="api-path">/revenue/recommendations</span><span class="api-desc">AI 요율 권고 목록 (승인 대기)</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/revenue/recommendations/{id}/approve</span><span class="api-desc">요율 권고 승인 (Manager 이상)</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/revenue/forecast</span><span class="api-desc">수요 예측 실행 (Prophet/XGBoost)</span></div>
+    <div class="api-row"><span class="method POST">POST</span><span class="api-path">/revenue/group-simulation</span><span class="api-desc">단체 예약 수락/거절 시나리오 시뮬레이션</span></div>
+  </div>
+</div>
+
+<!-- ===== ROADMAP ===== -->
+<div id="page-roadmap" class="page">
+  <h1>구현 로드맵</h1>
+  <p class="subtitle">4단계 구현 계획 — Phase 0 완료 → Phase 4까지</p>
+
+  <div class="timeline">
+    <div class="phase-item">
+      <div class="phase-dot" style="background:#1a3a2e; color:#34d399; border:2px solid #34d399;">0</div>
+      <div class="phase-content card">
+        <div class="phase-title">Phase 0 — 기반 구축 <span class="badge badge-done">완료</span></div>
+        <ul class="phase-tasks">
+          <li class="done">FastAPI 기본 서버 구성</li>
+          <li class="done">ChromaDB 연동</li>
+          <li class="done">PDF/TXT 문서 인덱싱</li>
+          <li class="done">기본 RAG 쿼리 (GPT-4o-mini)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase-item">
+      <div class="phase-dot" style="background:#1e3a5f; color:#60a5fa; border:2px solid #60a5fa;">1</div>
+      <div class="phase-content card">
+        <div class="phase-title">Phase 1 — 핵심 기능 <span class="badge badge-wip">4~6주</span></div>
+        <ul class="phase-tasks">
+          <li class="todo">JWT 인증 (Access + Refresh + Blacklist)</li>
+          <li class="todo">DOCX 문서 처리 (python-docx)</li>
+          <li class="todo">Work Order AI 분류 + 자동배정 (GPT)</li>
+          <li class="todo">SOP OCR 파이프라인 (Tesseract + OpenCV)</li>
+          <li class="todo">점검 스케줄 자동 생성 (Celery Beat)</li>
+          <li class="todo">MySQL 전체 스키마 마이그레이션 (Alembic)</li>
+          <li class="todo">부서별 권한 제어 (RBAC)</li>
+          <li class="todo">파일 저장소 (S3 Presigned URL)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase-item">
+      <div class="phase-dot" style="background:#3a2e1a; color:#fbbf24; border:2px solid #fbbf24;">2</div>
+      <div class="phase-content card">
+        <div class="phase-title">Phase 2 — 고도화 <span class="badge badge-todo">6~10주</span></div>
+        <ul class="phase-tasks">
+          <li class="todo">Next.js 14 프론트엔드 전체</li>
+          <li class="todo">PWA + Service Worker + IndexedDB 오프라인</li>
+          <li class="todo">Web Push 알림 (VAPID)</li>
+          <li class="todo">SOP 검토 워크플로우 상태머신</li>
+          <li class="todo">이상감지 엔진 (AnomalyDetector)</li>
+          <li class="todo">reportlab PDF 보고서 (한글 NanumGothic)</li>
+          <li class="todo">WebSocket 실시간 Work Order 대시보드</li>
+          <li class="todo">QR 코드 신고 기능</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase-item">
+      <div class="phase-dot" style="background:#2a1a3a; color:#a78bfa; border:2px solid #a78bfa;">3</div>
+      <div class="phase-content card">
+        <div class="phase-title">Phase 3 — 수익 관리 <span class="badge badge-todo">10~14주</span></div>
+        <ul class="phase-tasks">
+          <li class="todo">PMS API 연동 (직접 연동)</li>
+          <li class="todo">Facebook Prophet 수요 예측</li>
+          <li class="todo">XGBoost 다변량 예측 모델</li>
+          <li class="todo">AI 요율 권고 엔진 (GPT + 룰 기반 가드레일)</li>
+          <li class="todo">경쟁사 요율 수집 (Celery Beat)</li>
+          <li class="todo">단체 예약 시뮬레이터</li>
+          <li class="todo">예측 정확도 트래커 (MAPE)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase-item">
+      <div class="phase-dot" style="background:#1a2a3a; color:#2dd4bf; border:2px solid #2dd4bf;">4</div>
+      <div class="phase-content card">
+        <div class="phase-title">Phase 4 — 안정화 <span class="badge badge-todo">14~16주</span></div>
+        <ul class="phase-tasks">
+          <li class="todo">Google Vision API (고품질 OCR 대체)</li>
+          <li class="todo">Circuit Breaker 전체 적용</li>
+          <li class="todo">구조화 JSON 로그 + 메트릭 (p50/p95/p99)</li>
+          <li class="todo">GitHub Actions CI/CD (test → lint → build → deploy)</li>
+          <li class="todo">부하 테스트 (Locust)</li>
+          <li class="todo">Rate Limiting (로그인 시도 제한)</li>
+          <li class="todo">HTTPS + CORS 정책 (프로덕션)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" style="margin-top:32px;">
+    <h2>보안 체크리스트</h2>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3 style="color:#34d399; margin-bottom:12px;">✅ 계획됨</h3>
+        <div style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--text2);">
+          <div>🔐 JWT Refresh Token Rotation + 블랙리스트</div>
+          <div>🔑 bcrypt 패스워드 해시 (cost factor 12)</div>
+          <div>👤 Role-Based Access Control (Admin/Manager/Staff)</div>
+          <div>🔗 Presigned URL (직접 S3 접근 방지)</div>
+          <div>📋 불변 감사 로그 (audit_logs)</div>
+          <div>🛡️ SQL Injection 방지 (SQLAlchemy ORM)</div>
+          <div>📁 파일 업로드 검증 (MIME + 확장자 + 크기)</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="color:#fbbf24; margin-bottom:12px;">⏳ Phase 4 예정</h3>
+        <div style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--text2);">
+          <div>⏱️ Rate Limiting (로그인 시도 제한)</div>
+          <div>🔒 HTTPS 전용 (프로덕션)</div>
+          <div>🌐 CORS 정책 (허용 Origin 화이트리스트)</div>
+          <div>🔄 Circuit Breaker (외부 API 장애 격리)</div>
+          <div>📊 보안 헤더 (CSP, HSTS, X-Frame-Options)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Celery 스케줄 태스크</h2>
+    <div class="card">
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; gap:12px; align-items:center; padding:8px 12px; background:var(--surface2); border-radius:6px; font-size:13px;">
+          <span style="color:#fbbf24; font-family:monospace; width:200px; flex-shrink:0;">*/5 * * * *</span>
+          <span style="color:var(--text2);">SLA 에스컬레이션 체크 (Work Order)</span>
+        </div>
+        <div style="display:flex; gap:12px; align-items:center; padding:8px 12px; background:var(--surface2); border-radius:6px; font-size:13px;">
+          <span style="color:#fbbf24; font-family:monospace; width:200px; flex-shrink:0;">0 1 * * *</span>
+          <span style="color:var(--text2);">점검 스케줄 자동 생성 (Compliance)</span>
+        </div>
+        <div style="display:flex; gap:12px; align-items:center; padding:8px 12px; background:var(--surface2); border-radius:6px; font-size:13px;">
+          <span style="color:#fbbf24; font-family:monospace; width:200px; flex-shrink:0;">0 9 * * *</span>
+          <span style="color:var(--text2);">점검 리마인더 알림 발송</span>
+        </div>
+        <div style="display:flex; gap:12px; align-items:center; padding:8px 12px; background:var(--surface2); border-radius:6px; font-size:13px;">
+          <span style="color:#fbbf24; font-family:monospace; width:200px; flex-shrink:0;">0 6 * * *</span>
+          <span style="color:var(--text2);">PMS 데이터 수집 (Revenue)</span>
+        </div>
+        <div style="display:flex; gap:12px; align-items:center; padding:8px 12px; background:var(--surface2); border-radius:6px; font-size:13px;">
+          <span style="color:#fbbf24; font-family:monospace; width:200px; flex-shrink:0;">0 7 * * *</span>
+          <span style="color:var(--text2);">AI 요율 권고 생성 (Revenue)</span>
+        </div>
+        <div style="display:flex; gap:12px; align-items:center; padding:8px 12px; background:var(--surface2); border-radius:6px; font-size:13px;">
+          <span style="color:#fbbf24; font-family:monospace; width:200px; flex-shrink:0;">0 2 * * 0</span>
+          <span style="color:var(--text2);">소프트 삭제 파일 정리 (7일 초과)</span>
+        </div>
+        <div style="display:flex; gap:12px; align-items:center; padding:8px 12px; background:var(--surface2); border-radius:6px; font-size:13px;">
+          <span style="color:#fbbf24; font-family:monospace; width:200px; flex-shrink:0;">0 3 * * 1</span>
+          <span style="color:var(--text2);">이상감지 주간 분석 리포트</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function show(page, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  el.classList.add('active');
+  return false;
+}
+</script>
+</body>
+</html>
