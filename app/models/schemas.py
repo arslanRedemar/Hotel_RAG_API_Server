@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional
 
@@ -20,3 +21,18 @@ class IngestRequest(BaseModel):
 class IngestResponse(BaseModel):
     message: str
     doc_count: int
+
+
+class MessageOut(BaseModel):
+    role: str
+    content: str
+    sources: Optional[list[str]] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class HistoryResponse(BaseModel):
+    session_id: str
+    messages: list[MessageOut]

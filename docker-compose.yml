@@ -1,0 +1,41 @@
+services:
+  app:
+    build: .
+    container_name: hotel_rag_app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - MYSQL_URL=mysql+pymysql://${MYSQL_USER:-root}:${MYSQL_PASSWORD:-password}@mysql:3306/${MYSQL_DATABASE:-hotel_rag}
+    volumes:
+      - ./data/docs:/app/data/docs          # 호스트 문서 마운트
+      - chroma_data:/app/data/chroma_db     # ChromaDB 영속성
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: hotel_rag_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-hotel_rag}
+      MYSQL_USER: ${MYSQL_USER:-hotel_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  chroma_data:

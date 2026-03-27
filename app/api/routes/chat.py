@@ -1,14 +1,17 @@
 import uuid
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 
 from app.models.schemas import ChatRequest, ChatResponse
 from app.rag.chain import chat as rag_chat
+from app.database.connection import get_db
+from app.database.crud import save_message
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
 @router.post("", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+def chat(request: ChatRequest, db: Session = Depends(get_db)):
     session_id = request.session_id or str(uuid.uuid4())
 
     try:
@@ -22,8 +25,8 @@ async def chat(request: ChatRequest):
         if doc.metadata.get("source")
     })
 
-    return ChatResponse(
-        answer=answer,
-        sources=sources,
-        session_id=session_id,
-    )
+    # MySQL에 대화 내역 저장
+    save_message(db, session_id, role="human", content=request.message)
+    save_message(db, session_id, role="ai", content=answer, sources=sources)
+
+    return ChatResponse(answer=answer, sources=sources, session_id=session_id)
