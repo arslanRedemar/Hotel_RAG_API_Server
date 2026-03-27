@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o-mini"
     embedding_model: str = "text-embedding-3-small"
 
+    # MySQL
+    mysql_url: str = "mysql+pymysql://root:password@localhost:3306/hotel_rag"
+
     class Config:
         env_file = ".env"
 
