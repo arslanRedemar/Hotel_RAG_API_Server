@@ -75,6 +75,11 @@
       "source": "langchain-ai/langsmith-skills",
       "sourceType": "github",
       "computedHash": "75b946c909c003e31f138307249c4a27a8becbd0be3b659d0acfd211781025be"
+    },
+    "tdd-workflow": {
+      "source": "affaan-m/everything-claude-code",
+      "sourceType": "github",
+      "computedHash": "b043ab9a253352d5ab49d359cf8f92b9826f6008daf9a9831fd0445c09482df4"
     }
   }
 }
