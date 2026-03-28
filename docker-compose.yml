@@ -22,13 +22,13 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 40s
     restart: unless-stopped
 
   celery_worker:
     build: .
     container_name: hotel_ax_worker
-    command: celery -A app.tasks worker --loglevel=info --concurrency=4
+    command: celery -A app.tasks.sop_tasks.celery_app worker --loglevel=info --concurrency=4
     env_file:
       - .env
     environment:
@@ -37,21 +37,10 @@ services:
     volumes:
       - ./data:/app/data
     depends_on:
-      - api
-      - redis
-    restart: unless-stopped
-
-  celery_beat:
-    build: .
-    container_name: hotel_ax_beat
-    command: celery -A app.tasks beat --loglevel=info --scheduler celery.beat:PersistentScheduler
-    env_file:
-      - .env
-    environment:
-      - MYSQL_URL=mysql+pymysql://root:${MYSQL_ROOT_PASSWORD:-password}@mysql:3306/${MYSQL_DATABASE:-hotel_rag}
-      - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      - redis
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   mysql:
