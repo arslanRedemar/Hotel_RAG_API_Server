@@ -8,6 +8,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
 )
@@ -277,3 +278,97 @@ class SOPAcknowledgement(Base):
     acked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     sop: Mapped["SOP"] = relationship(back_populates="acknowledgements")
+
+
+# ─────────────────────────── Work Order ──────────────────────
+
+
+class WorkOrder(Base):
+    """업무 지시서 (Work Order)"""
+
+    __tablename__ = "work_orders"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    wo_number: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    room_no: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    category: Mapped[str] = mapped_column(String(50), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    photo_urls: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    severity: Mapped[str] = mapped_column(
+        Enum("critical", "high", "medium", "low"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(
+        Enum("open", "assigned", "in_progress", "on_hold", "completed", "cancelled"),
+        nullable=False,
+        default="open",
+        index=True,
+    )
+    ai_classification: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    reported_by: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    reported_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    assigned_to: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    assigned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    on_hold_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parts_used: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    labor_hours: Mapped[float | None] = mapped_column(Numeric(4, 1), nullable=True)
+    actual_duration_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    external_vendor: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    external_contact: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sla_deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    escalated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    history: Mapped[list["WorkOrderHistory"]] = relationship(
+        back_populates="work_order",
+        cascade="all, delete-orphan",
+        order_by="WorkOrderHistory.changed_at",
+    )
+    reporter: Mapped["User"] = relationship(foreign_keys=[reported_by])
+    assignee: Mapped["User | None"] = relationship(foreign_keys=[assigned_to])
+
+
+class WorkOrderHistory(Base):
+    """Work Order 상태 변경 이력"""
+
+    __tablename__ = "work_order_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    wo_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("work_orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    changed_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    work_order: Mapped["WorkOrder"] = relationship(back_populates="history")
+
+
+class AssigneeCapability(Base):
+    """담당자 역량 매핑 (어떤 유형을 처리할 수 있는지)"""
+
+    __tablename__ = "assignee_capabilities"
+
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    category: Mapped[str] = mapped_column(String(50), primary_key=True)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    is_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    user: Mapped["User"] = relationship()
