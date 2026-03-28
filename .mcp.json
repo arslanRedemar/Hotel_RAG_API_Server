@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "langsmith": {
+      "type": "http",
+      "url": "https://langsmith-mcp-server.onrender.com/mcp",
+      "headers": {
+        "LANGSMITH-API-KEY": "${LANGSMITH_API_KEY}"
+      }
+    }
+  }
+}
