@@ -140,7 +140,7 @@ Hotel AX는 5개의 독립적인 기능 모듈(RAG, SOP, Work Order, Compliance,
 | SYS-F41 | 외부 API(OpenAI, PMS, 날씨) 호출 시 Circuit Breaker 패턴을 적용하여 연속 실패 시 빠른 실패(Fail Fast) 처리해야 한다 | 외부 API 5회 연속 실패 시 circuit OPEN, 이후 요청 즉시 503 반환 확인 | P1 |
 | SYS-F42 | Circuit Breaker 상태(OPEN/CLOSED/HALF_OPEN)와 오류율을 `/metrics` 엔드포인트에서 조회할 수 있어야 한다 | GET /metrics 응답에 각 외부 API별 CB 상태 포함 | P1 |
 | SYS-F43 | PMS 연동은 REST API 또는 웹훅(Webhook) 방식을 지원해야 한다 | PMS Webhook 수신 엔드포인트 구현, 수신 시 DB 업데이트 테스트 통과 | P1 |
-| SYS-F44 | OpenAI 일별 토큰 사용량을 기록하여 관리자가 월별 비용을 추정할 수 있어야 한다 | 매 API 호출 후 token_usage_logs 테이블에 모델·토큰 수·비용 추정값 기록 | P2 |
+| SYS-F44 | 클라우드 API 호출 시 모델명·입력 토큰·출력 토큰·추정 비용을 `token_usage_logs` 테이블에 모듈별로 기록해야 한다 | 매 API 호출 후 모든 필드가 기록됨, GET /metrics/llm-cost 로 모듈별 집계 조회 가능 | P1 |
 
 ---
 
@@ -188,8 +188,10 @@ Hotel AX는 5개의 독립적인 기능 모듈(RAG, SOP, Work Order, Compliance,
 | 계층 | 기술 | 버전 | 비고 |
 |------|------|------|------|
 | API 서버 | FastAPI + Uvicorn | 0.115 / 0.30 | Python 3.11 |
-| LLM | OpenAI GPT-4o-mini | — | 설정으로 교체 가능 |
-| 임베딩 | OpenAI text-embedding-3-small | — | 설정으로 교체 가능 |
+| LLM (Tier 3, 클라우드) | OpenAI GPT-4o-mini | — | 복합 RAG 질의·장문 생성 |
+| LLM (Tier 1~2, 로컬) | Ollama + Qwen2.5-3B / Phi-3-mini | — | 분류·구조 추출·단순 QA, CPU 서빙 가능 |
+| 임베딩 (로컬 우선) | nomic-embed-text-v1.5 / BGE-M3 | — | 로컬 서빙, 클라우드 폴백 설정 가능 |
+| OCR/비전 (로컬) | DeepSeek-VL2-Small / GOT-OCR2 | 1~2B | SOP 문서 이미지 파싱 전용 |
 | 벡터 DB | ChromaDB (로컬 퍼시스턴트) | 1.0+ | |
 | RDBMS | MySQL 8.0 | — | Docker |
 | ORM | SQLAlchemy 2.0 + Alembic | — | |
@@ -201,7 +203,51 @@ Hotel AX는 5개의 독립적인 기능 모듈(RAG, SOP, Work Order, Compliance,
 
 ---
 
-## 11. 연관 요구사항
+## 11. LLM 비용 최적화 — 로컬/클라우드 라우팅 전략
+
+### 11-1. 배경
+
+Hotel AX의 모든 AI 기능이 클라우드 API(OpenAI)에만 의존하면 두 가지 문제가 발생한다.
+
+1. **비용**: 200실 호텔에서 직원 50명이 하루 평균 10회씩 AI를 사용한다고 가정하면, 월 15,000건 이상의 API 호출이 발생한다. OCR·분류처럼 소형 모델로도 충분한 작업까지 GPT-4o 급 API를 호출하면 불필요한 지출이 누적된다.
+2. **가용성**: 인터넷 불안정·OpenAI 서비스 장애 시 OCR, 분류 등 기본 기능까지 전면 중단된다.
+
+**해결 원칙: 로컬 우선(Local-First), 클라우드 폴백(Cloud Fallback)**
+
+작업 복잡도에 따라 세 계층으로 모델을 분리하고, 하위 계층에서 처리 가능한 작업은 클라우드 API를 호출하지 않는다.
+
+| 계층 | 대상 작업 | 모델 예시 | 클라우드 호출 조건 |
+|------|---------|---------|---------------|
+| Tier 1 — 로컬 전용 | OCR, WO 카테고리·긴급도 분류, 임베딩 생성 | DeepSeek-VL2-Small(1B), Phi-3-mini, nomic-embed-text | 신뢰도 < 임계값일 때만 폴백 |
+| Tier 2 — 로컬 우선 | SOP 구조 추출, RAG 단순 질의(단일 청크 답변 가능) | Qwen2.5-3B, Gemma-2-2B | 신뢰도 < 70% 또는 멀티소스 필요 시 |
+| Tier 3 — 클라우드 우선 | RAG 복합 질의(멀티소스 종합), 장문 생성 | GPT-4o-mini 이상 | 기본값 |
+
+### 11-2. 기능 요구사항
+
+| ID | 요구사항 | 수락 기준 | 우선순위 |
+|----|---------|---------|---------|
+| SYS-F70 | 시스템은 작업 유형에 따라 로컬 모델과 클라우드 API를 자동 선택하는 LLM Router 컴포넌트를 구현해야 한다 | 동일 요청이 설정된 라우팅 규칙에 따라 로컬/클라우드로 분기됨을 단위 테스트로 확인 | P1 |
+| SYS-F71 | 로컬 모델 처리 결과의 신뢰도 점수가 설정 임계값(기본 70%) 미만인 경우에만 클라우드 API 폴백을 호출해야 한다 | 고신뢰도 샘플에서 클라우드 API 미호출 확인, 저신뢰도 샘플에서 폴백 호출 확인 | P1 |
+| SYS-F72 | 로컬 모델과 클라우드 API의 모듈별·일별 사용 비율 및 클라우드 추정 비용을 대시보드에서 조회할 수 있어야 한다 | GET /metrics/llm-cost 가 `local_calls`, `cloud_calls`, `cloud_cost_usd_est` 모듈별 집계 반환 | P1 |
+| SYS-F73 | 월 누적 클라우드 API 비용 추정치가 설정된 예산의 80%에 도달하면 Admin에게 경고 알림을 발송하고, 100% 초과 시 Tier 3 요청을 차단(또는 경고 후 허용)해야 한다 | 임계값 초과 시뮬레이션 시 알림 발송 이력 생성 확인 | P1 |
+| SYS-F74 | 각 Tier의 로컬 모델 경로(또는 Ollama 엔드포인트)와 신뢰도 임계값을 환경 변수로 설정할 수 있어야 한다 | `.env`에서 `LOCAL_LLM_ENDPOINT`, `LOCAL_LLM_CONFIDENCE_THRESHOLD` 변경 후 즉시 반영 | P1 |
+| SYS-F75 | 로컬 모델 서버(Ollama 등)가 응답하지 않을 경우 자동으로 클라우드 API로 전환하고, 전환 이벤트를 로그에 기록해야 한다 | 로컬 모델 중단 시뮬레이션 → 클라우드 폴백 동작 + `llm_fallback` 로그 생성 확인 | P1 |
+
+### 11-3. 권장 로컬 모델 후보
+
+| 용도 | 권장 모델 | 파라미터 | 비고 |
+|------|---------|---------|------|
+| OCR / 문서 이미지 파싱 | DeepSeek-VL2-Small, GOT-OCR2, Qwen2-VL-2B | 1~2B | GPU 불필요(CPU 추론 가능) |
+| 텍스트 분류 (WO 카테고리·긴급도) | Phi-3-mini, Qwen2.5-1.5B | 1.5~3.8B | 파인튜닝 시 99% 이상 정확도 가능 |
+| 구조 추출 (SOP) | Qwen2.5-3B, Gemma-2-2B | 2~3B | 한국어 지원 우선 |
+| 임베딩 | nomic-embed-text-v1.5, BGE-M3 | — | 768/1024-dim, 로컬 서빙 가능 |
+| 복합 QA (RAG) | Qwen2.5-7B, Gemma-2-9B | 7~9B | GPU 권장, CPU 서빙 시 응답 지연 허용 시 |
+
+> 모델 선택은 서버 사양에 따라 조정. GPU 없는 환경은 1~3B 모델만 권장.
+
+---
+
+## 12. 연관 요구사항
 
 - [RAG Assistant](./rag_assistant.md)
 - [SOP Digitalization](./sop_digitalization.md)
