@@ -105,6 +105,17 @@ async def metrics():
     return {"circuits": get_all_statuses(), "api": get_metrics_stats()}
 
 
+@app.get("/admin/llm-cost", tags=["admin"])
+async def llm_cost():
+    """모듈별 LLM 토큰 사용량 및 비용 대시보드 (SYS-F72)."""
+    from app.core.cost_monitor import get_total_cost, get_usage_summary
+    return {
+        "summary": get_usage_summary(),
+        "total_cost_usd": round(get_total_cost(), 4),
+        "budget_usd": settings.monthly_llm_budget_usd,
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(

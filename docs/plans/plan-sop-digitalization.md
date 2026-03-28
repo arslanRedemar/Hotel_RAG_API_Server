@@ -69,14 +69,15 @@
 
 #### 1-1. OCR 처리 모듈
 
-**선택지 평가**:
-| 엔진 | 한국어 정확도 | 비용 | 복잡도 |
-|------|------------|------|--------|
-| Tesseract 5.x | 90~93% | 무료 | 낮음 |
-| Google Vision API | 98%+ | $1.5/1000페이지 | 낮음 |
-| Azure Form Recognizer | 97%+ | $1.0/페이지 | 낮음 |
+**선택지 평가 (SOP-F06 로컬 우선 전략 반영)**:
+| 엔진 | 한국어 정확도 | 비용 | 복잡도 | Tier |
+|------|------------|------|--------|------|
+| DeepSeek-VL2-Small / GOT-OCR2 (Ollama) | 92~95% | 무료 (로컬) | 중간 | Tier 1 (기본) |
+| Tesseract 5.x | 90~93% | 무료 | 낮음 | Tier 1 (폴백) |
+| Google Vision API | 98%+ | $1.5/1000페이지 | 낮음 | Tier 3 (저신뢰도 폴백) |
 
-**결정**: 기본값 Tesseract (무료), 고정밀 옵션으로 Google Vision API 선택 가능하도록 설정화.
+**결정**: 기본값 로컬 비전 모델(DeepSeek-VL2-Small via Ollama), confidence < 0.70이면 Google Vision으로 폴백.
+클라우드 폴백 호출은 전체 OCR 요청의 ≤20%를 목표로 함 (SOP-F06).
 
 ```python
 # app/sop/ocr.py
@@ -85,38 +86,91 @@ import pytesseract
 from PIL import Image
 import pdf2image
 from pathlib import Path
+import httpx, base64, json
+
+from app.core.config import settings
+from app.core.cost_monitor import record_usage
 
 class OCRProcessor:
-    def __init__(self, engine: str = "tesseract"):
+    """SOP-F06: 로컬 비전 모델 우선, 저신뢰도 시 클라우드 폴백"""
+
+    def __init__(self, engine: str = "local"):
+        # engine: "local" | "tesseract" | "google_vision"
         self.engine = engine
+        self.confidence_threshold = settings.local_llm_confidence_threshold  # 0.70
 
     def extract_text_from_scanned_pdf(self, file_path: str) -> list[dict]:
         """
-        반환: [{"page": 1, "text": "...", "confidence": 0.95}, ...]
+        반환: [{"page": 1, "text": "...", "confidence": 0.95, "engine_used": "local"}, ...]
         """
         images = pdf2image.convert_from_path(file_path, dpi=300)
         results = []
 
         for page_num, image in enumerate(images, start=1):
-            if self.engine == "tesseract":
-                data = pytesseract.image_to_data(
-                    image,
-                    lang="kor+eng",
-                    output_type=pytesseract.Output.DICT
-                )
-                text = " ".join(w for w in data["text"] if w.strip())
-                conf_values = [c for c in data["conf"] if c != -1]
-                confidence = sum(conf_values) / len(conf_values) / 100 if conf_values else 0.0
+            if self.engine == "local":
+                text, confidence = self._local_vision_ocr(image)
+                engine_used = "local"
+                # SOP-F06: 신뢰도 미달 시 클라우드 폴백
+                if confidence < self.confidence_threshold:
+                    text, confidence = self._google_vision_ocr(image)
+                    engine_used = "google_vision"
+            elif self.engine == "tesseract":
+                text, confidence = self._tesseract_ocr(image)
+                engine_used = "tesseract"
             elif self.engine == "google_vision":
                 text, confidence = self._google_vision_ocr(image)
+                engine_used = "google_vision"
+            else:
+                text, confidence, engine_used = "", 0.0, "unknown"
 
             results.append({
                 "page": page_num,
                 "text": text,
-                "confidence": round(confidence, 3)
+                "confidence": round(confidence, 3),
+                "engine_used": engine_used,
             })
 
         return results
+
+    def _local_vision_ocr(self, image: Image.Image) -> tuple[str, float]:
+        """Ollama 로컬 비전 모델(DeepSeek-VL2 / GOT-OCR2) 호출"""
+        import io
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
+
+        payload = {
+            "model": settings.local_ocr_model,  # e.g. "deepseek-vl2"
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+                        {"type": "text", "text": "이 이미지의 텍스트를 정확히 추출해서 원본 형식을 유지하며 반환하세요."},
+                    ],
+                }
+            ],
+            "stream": False,
+        }
+        resp = httpx.post(f"{settings.local_llm_endpoint}/api/chat", json=payload, timeout=60)
+        resp.raise_for_status()
+        data = resp.json()
+        text = data.get("message", {}).get("content", "")
+        # Ollama는 자체 confidence를 제공하지 않으므로 추정값 사용
+        confidence = 0.80 if text.strip() else 0.0
+        return text, confidence
+
+    def _tesseract_ocr(self, image: Image.Image) -> tuple[str, float]:
+        data = pytesseract.image_to_data(image, lang="kor+eng", output_type=pytesseract.Output.DICT)
+        text = " ".join(w for w in data["text"] if w.strip())
+        conf_values = [c for c in data["conf"] if c != -1]
+        confidence = sum(conf_values) / len(conf_values) / 100 if conf_values else 0.0
+        return text, confidence
+
+    def _google_vision_ocr(self, image: Image.Image) -> tuple[str, float]:
+        # 기존 Google Vision 구현 (SOP-F06 클라우드 폴백)
+        record_usage(module="sop_ocr", prompt_tokens=0, completion_tokens=0, model="google_vision")
+        raise NotImplementedError("Google Vision OCR 구현 필요")
 ```
 
 #### 1-2. AI 구조 추출 모듈
@@ -159,26 +213,45 @@ SOP_EXTRACTION_PROMPT = """
 """
 
 class SOPExtractor:
+    """SOP-F15: 로컬 LLM 우선 구조 추출, review_required 항목만 클라우드로 폴백"""
+
     def __init__(self):
-        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        from app.core.llm_router import llm_router, TaskTier
+        self._router = llm_router
+        self._tier = TaskTier.LOCAL_FIRST
+        self.llm = self._router.get_llm(self._tier)
+        self.fallback_llm = self._router.get_fallback(self._tier)
 
     def extract(self, text: str, max_chars: int = 6000) -> dict:
+        """SOP-F15: 로컬 LLM으로 1차 추출, review_required=True이면 클라우드로 재추출"""
         # 텍스트가 너무 길면 분할 처리
         if len(text) > max_chars:
             return self._extract_chunked(text, max_chars)
 
         prompt = SOP_EXTRACTION_PROMPT.format(text=text[:max_chars])
-        response = self.llm.invoke([HumanMessage(content=prompt)])
 
+        # 1차: 로컬 LLM 시도
+        response = self.llm.invoke([HumanMessage(content=prompt)])
         try:
             result = json.loads(response.content)
         except json.JSONDecodeError:
-            # LLM이 JSON이 아닌 응답을 줬을 때 재시도
             result = self._retry_extraction(text)
 
         # 신뢰도 낮으면 review_required 강제 설정
-        if result.get("extraction_confidence", 1.0) < 0.7:
+        confidence = result.get("extraction_confidence", 1.0)
+        if confidence < self._router.threshold:
             result["review_required"] = True
+
+        # SOP-F15: review_required 항목은 클라우드 LLM으로 재추출
+        if result.get("review_required") and self.fallback_llm is not None:
+            cloud_response = self.fallback_llm.invoke([HumanMessage(content=prompt)])
+            try:
+                result = json.loads(cloud_response.content)
+                result["_source"] = "cloud_fallback"
+            except json.JSONDecodeError:
+                pass  # 클라우드도 실패하면 로컬 결과 유지
+        else:
+            result["_source"] = "local"
 
         return result
 

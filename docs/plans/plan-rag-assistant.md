@@ -157,6 +157,53 @@ class ChatResponse(BaseModel):
     session_id: Optional[str] = None
 ```
 
+#### 1-5. 로컬 임베딩 및 LLM 쿼리 라우팅 (RAG-F16, RAG-F17)
+**파일**: `app/rag/ingest.py`, `app/rag/graph.py`
+
+임베딩은 기본값 로컬(Ollama), 단순 단일 청크 쿼리는 로컬 LLM으로 처리. 복합 쿼리만 클라우드로 라우팅.
+
+```python
+# app/rag/ingest.py — 임베딩 프로바이더 전환 (RAG-F16)
+from app.core.embedding_router import get_embeddings
+
+def ingest_documents(docs_path: str):
+    embeddings = get_embeddings()  # EMBEDDING_PROVIDER 환경변수로 결정
+    vectorstore = Chroma(
+        persist_directory=settings.chroma_persist_dir,
+        embedding_function=embeddings,
+    )
+    # ... 기존 로직
+```
+
+```python
+# app/rag/graph.py — 쿼리 복잡도 기반 LLM 라우팅 (RAG-F17)
+from app.core.llm_router import llm_router, TaskTier
+
+def classify_query_complexity(query: str, retrieved_docs: list) -> TaskTier:
+    """
+    단순 쿼리(단일 소스, 단답형) → Tier 2 로컬 LLM
+    복합 쿼리(다수 소스 통합, 추론 필요) → Tier 3 클라우드
+    """
+    if len(retrieved_docs) <= 1 and len(query) < 50:
+        return TaskTier.LOCAL_FIRST  # 로컬 LLM
+    return TaskTier.CLOUD_FIRST      # 클라우드 LLM
+
+def rag_node_generate(state: dict) -> dict:
+    query = state["question"]
+    docs = state["retrieved_docs"]
+
+    tier = classify_query_complexity(query, docs)
+    llm = llm_router.get_llm(tier)
+
+    context = "\n\n".join(d.page_content for d in docs)
+    prompt = SYSTEM_PROMPT.format(context=context)
+    response = llm.invoke([
+        SystemMessage(content=prompt),
+        HumanMessage(content=query),
+    ])
+    return {**state, "answer": response.content, "_llm_tier": tier.name}
+```
+
 ---
 
 ### Phase 2 — 인증 및 권한 (SYS-F01~05 + RAG-F20~22)
