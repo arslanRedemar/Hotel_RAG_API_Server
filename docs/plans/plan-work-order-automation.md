@@ -184,11 +184,20 @@ severity (택1):
 """
 
 class WorkOrderClassifier:
+    """WO-F14: 로컬 LLM 우선 분류, confidence < 0.80 시 클라우드 폴백"""
+
+    CONFIDENCE_THRESHOLD = 0.80  # WO-F14: 분류 신뢰도 기준
+
     def __init__(self):
-        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        from app.core.llm_router import llm_router, TaskTier
+        self._router = llm_router
+        self._tier = TaskTier.LOCAL_FIRST
+        self.llm = self._router.get_llm(self._tier)          # 로컬 LLM
+        self.fallback_llm = self._router.get_fallback(self._tier)  # 클라우드 폴백
 
     def classify(self, location: str, description: str, context: dict = None) -> dict:
         """
+        WO-F14: 1차 로컬 LLM 분류 → confidence < 0.80이면 클라우드로 재분류
         context: PMS에서 조회한 객실 정보
         - vip_checkin_today: bool
         - checkout_today: bool
@@ -205,20 +214,31 @@ class WorkOrderClassifier:
             location=location or "미지정",
             description=enhanced_description
         )
-        response = self.llm.invoke([HumanMessage(content=prompt)])
 
+        # 1차: 로컬 LLM 분류
+        result = self._invoke_llm(self.llm, prompt)
+        result["_source"] = "local"
+
+        # WO-F14: 신뢰도 미달 시 클라우드 폴백
+        if result.get("confidence", 0.0) < self.CONFIDENCE_THRESHOLD and self.fallback_llm:
+            cloud_result = self._invoke_llm(self.fallback_llm, prompt)
+            if cloud_result.get("confidence", 0.0) > result.get("confidence", 0.0):
+                cloud_result["_source"] = "cloud_fallback"
+                return cloud_result
+
+        return result
+
+    def _invoke_llm(self, llm, prompt: str) -> dict:
+        response = llm.invoke([HumanMessage(content=prompt)])
         try:
-            result = json.loads(response.content)
+            return json.loads(response.content)
         except json.JSONDecodeError:
-            # 파싱 실패 시 안전한 기본값
-            result = {
+            return {
                 "category": "기타",
                 "severity": "medium",
                 "severity_reason": "자동 분류 실패 - 수동 검토 필요",
-                "confidence": 0.0
+                "confidence": 0.0,
             }
-
-        return result
 ```
 
 ---

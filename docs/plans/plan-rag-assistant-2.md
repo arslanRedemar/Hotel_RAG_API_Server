@@ -364,8 +364,8 @@ class RAGState(TypedDict):
     department: str         # 추가: 부서 필터용
 
 def _build_user_graph(user: User):
-    """사용자별 권한이 적용된 그래프 생성"""
-    llm = ChatOpenAI(model=settings.llm_model, temperature=0.2)
+    """사용자별 권한이 적용된 그래프 생성 (RAG-F16, RAG-F17: LLMRouter 적용)"""
+    from app.core.llm_router import llm_router, TaskTier
     retriever = build_user_retriever(user)
 
     def retrieve(state: RAGState) -> dict:
@@ -374,14 +374,22 @@ def _build_user_graph(user: User):
         return {"context": docs}
 
     def generate(state: RAGState) -> dict:
+        question = state["messages"][-1].content
+        docs = state["context"]
+
+        # RAG-F17: 쿼리 복잡도로 LLM Tier 결정
+        # 단일 소스 + 짧은 쿼리 → 로컬 LLM, 다중 소스 → 클라우드
+        tier = TaskTier.LOCAL_FIRST if (len(docs) <= 1 and len(question) < 50) else TaskTier.CLOUD_FIRST
+        llm = llm_router.get_llm(tier)
+
         context_text = "\n\n---\n\n".join(
             f"[출처: {doc.metadata.get('source', '알 수 없음')} "
             f"p.{doc.metadata.get('page', '?')}]\n{doc.page_content}"
-            for doc in state["context"]
+            for doc in docs
         )
         system_msg = SystemMessage(content=SYSTEM_PROMPT.format(context=context_text))
         response = llm.invoke([system_msg] + list(state["messages"]))
-        return {"messages": [response]}
+        return {"messages": [response], "_llm_tier": tier.name}
 
     graph = StateGraph(RAGState)
     graph.add_node("retrieve", retrieve)

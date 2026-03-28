@@ -17,17 +17,22 @@
 | 환경 변수 관리 (.env) | ✅ | `app/core/config.py` |
 | CORS 설정 | ✅ | `main.py` |
 | 헬스 체크 엔드포인트 | ✅ | `main.py` |
+| JWT 인증, 역할 기반 권한 | ✅ | `app/auth/` |
+| 알림 시스템 (Email/Web Push) | ✅ | `app/notifications/` |
+| 파일 저장소 (업로드/Presigned URL) | ✅ | `app/storage/service.py` |
+| 감사 로그 (불변) | ✅ | `app/audit/logger.py` |
+| Circuit Breaker | ✅ | `app/core/circuit_breaker.py` |
+| 구조화된 로그 + 메트릭 미들웨어 | ✅ | `app/core/logging.py`, `app/core/middleware.py` |
+| LLM 라우터 (로컬/클라우드) | ✅ | `app/core/llm_router.py` |
+| 임베딩 프로바이더 전환 | ✅ | `app/core/embedding_router.py` |
+| LLM 비용 모니터링 | ✅ | `app/core/cost_monitor.py` |
 
 ### 미구현 (Gap)
 | 요구사항 ID | 내용 | 우선순위 |
 |------------|------|---------|
-| SYS-F01~05 | JWT 인증, 역할 기반 권한 | P0 |
-| SYS-F10~13 | 알림 시스템 (Email/Push/SMS) | P1 |
-| SYS-F20~23 | 파일 저장소 (업로드/Presigned URL) | P0 |
-| SYS-F30~33 | 감사 로그 (불변, 5년 보존) | P0 |
-| SYS-F41 | Circuit Breaker (외부 API 장애 대응) | P1 |
 | SYS-F53 | CI 파이프라인 (자동 테스트) | P1 |
-| SYS-F61~62 | 구조화된 로그 + 메트릭 수집 | P1 |
+| SYS-F74 | 로컬 모델 폴백률 Prometheus 메트릭 노출 | P2 |
+| SYS-F44 | LLM 비용 월 예산 알림 — Slack/이메일 연동 | P1 |
 
 ---
 
@@ -495,6 +500,166 @@ def create_work_order(data: dict, current_user: User) -> dict:
 
 ---
 
+### 3-6. LLM 라우터 (SYS-F70~75)
+
+```python
+# app/core/llm_router.py
+from enum import IntEnum
+from langchain_community.chat_models import ChatOllama
+from langchain_openai import ChatOpenAI
+from app.core.config import settings
+
+class TaskTier(IntEnum):
+    """
+    Tier 1: 로컬 전용  — OCR, 분류, 임베딩 (SYS-F70)
+    Tier 2: 로컬 우선  — 구조 추출, 단순 RAG (SYS-F71)
+    Tier 3: 클라우드   — 복합 추론, 멀티소스 RAG (SYS-F72)
+    """
+    LOCAL_ONLY = 1
+    LOCAL_FIRST = 2
+    CLOUD_FIRST = 3
+
+
+class LLMRouter:
+    """SYS-F70: 작업 유형별 로컬/클라우드 자동 라우팅"""
+
+    def __init__(self):
+        self._local = ChatOllama(
+            model=settings.local_llm_model,          # e.g. "qwen2.5:3b"
+            base_url=settings.local_llm_endpoint,    # e.g. "http://localhost:11434"
+            temperature=0,
+        )
+        self._cloud = ChatOpenAI(
+            model=settings.llm_model,                # e.g. "gpt-4o-mini"
+            api_key=settings.openai_api_key,
+            temperature=0,
+        )
+        self.threshold: float = settings.local_llm_confidence_threshold  # default 0.70
+
+    def get_llm(self, tier: TaskTier):
+        """Tier에 따라 적절한 LLM 반환"""
+        if tier == TaskTier.CLOUD_FIRST:
+            return self._cloud
+        return self._local  # Tier 1/2는 로컬 우선
+
+    def get_fallback(self, tier: TaskTier):
+        """Tier 2는 낮은 confidence 시 클라우드 폴백 반환"""
+        if tier == TaskTier.LOCAL_FIRST:
+            return self._cloud
+        return None  # Tier 1은 폴백 없음
+
+    def should_fallback(self, confidence: float) -> bool:
+        return confidence < self.threshold
+
+
+# 싱글톤
+llm_router = LLMRouter()
+```
+
+```python
+# app/core/embedding_router.py
+from langchain_community.embeddings import OllamaEmbeddings
+from langchain_openai import OpenAIEmbeddings
+from app.core.config import settings
+
+
+def get_embeddings():
+    """
+    RAG-F16: 환경변수 EMBEDDING_PROVIDER에 따라 로컬/클라우드 임베딩 선택
+    - local  : nomic-embed-text-v1.5 via Ollama (기본값)
+    - openai : text-embedding-3-small
+    """
+    provider = settings.embedding_provider.lower()
+    if provider == "openai":
+        return OpenAIEmbeddings(
+            model=settings.embedding_model,
+            api_key=settings.openai_api_key,
+        )
+    # 기본값: 로컬 Ollama 임베딩
+    return OllamaEmbeddings(
+        model=settings.local_embedding_model,   # e.g. "nomic-embed-text"
+        base_url=settings.local_llm_endpoint,
+    )
+```
+
+```python
+# app/core/config.py 추가 필드 (Pydantic Settings)
+
+class Settings(BaseSettings):
+    # ... 기존 필드 ...
+
+    # ===== 로컬 LLM (SYS-F70) =====
+    local_llm_endpoint: str = "http://localhost:11434"
+    local_llm_model: str = "qwen2.5:3b"           # Tier 2 구조 추출
+    local_ocr_model: str = "deepseek-vl2"          # Tier 1 OCR (Ollama)
+    local_classifier_model: str = "phi3:mini"      # Tier 1 분류
+    local_embedding_model: str = "nomic-embed-text" # Tier 1 임베딩
+    local_llm_confidence_threshold: float = 0.70   # 폴백 트리거 기준
+
+    # ===== 임베딩 프로바이더 (RAG-F16) =====
+    embedding_provider: str = "local"              # "local" | "openai"
+```
+
+```python
+# app/core/cost_monitor.py (SYS-F72~73)
+import logging
+from dataclasses import dataclass, field
+from threading import Lock
+
+logger = logging.getLogger(__name__)
+
+@dataclass
+class TokenUsage:
+    module: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    cost_usd: float = 0.0
+
+_usage_store: dict[str, TokenUsage] = {}
+_lock = Lock()
+
+def record_usage(module: str, prompt_tokens: int, completion_tokens: int, model: str = "gpt-4o-mini"):
+    """SYS-F72: 모듈별 토큰 사용량 기록"""
+    # gpt-4o-mini: $0.15/1M input, $0.60/1M output
+    PRICE = {"gpt-4o-mini": (0.15, 0.60), "gpt-4o": (5.0, 15.0)}
+    in_p, out_p = PRICE.get(model, (0.15, 0.60))
+    cost = (prompt_tokens * in_p + completion_tokens * out_p) / 1_000_000
+
+    with _lock:
+        if module not in _usage_store:
+            _usage_store[module] = TokenUsage(module=module)
+        u = _usage_store[module]
+        u.prompt_tokens += prompt_tokens
+        u.completion_tokens += completion_tokens
+        u.cost_usd += cost
+
+    # SYS-F73: 월 예산 80% 초과 시 알림
+    _check_budget_alert()
+
+def get_usage_summary() -> list[dict]:
+    """SYS-F72: 대시보드용 집계"""
+    with _lock:
+        return [
+            {
+                "module": u.module,
+                "prompt_tokens": u.prompt_tokens,
+                "completion_tokens": u.completion_tokens,
+                "total_tokens": u.prompt_tokens + u.completion_tokens,
+                "cost_usd": round(u.cost_usd, 4),
+            }
+            for u in _usage_store.values()
+        ]
+
+def _check_budget_alert():
+    from app.core.config import settings
+    total_cost = sum(u.cost_usd for u in _usage_store.values())
+    budget = getattr(settings, "monthly_llm_budget_usd", 0)
+    if budget > 0 and total_cost >= budget * 0.8:
+        logger.warning(f"[SYS-F73] LLM 월 예산 80% 도달: ${total_cost:.2f} / ${budget:.2f}")
+```
+
+---
+
 ## 4. 헬스 체크 개선 (SYS-F60)
 
 ```python
@@ -554,13 +719,27 @@ HOTEL_NAME=호텔명
 
 # ===== 보안 =====
 SECRET_KEY=                    # openssl rand -hex 32
-ACCESS_TOKEN_EXPIRE_MINUTES=480
+ACCESS_TOKEN_EXPIRE_MINUTES=60
 QR_SECRET=                     # Guest QR 서명용 별도 시크릿
 
 # ===== OpenAI =====
 OPENAI_API_KEY=
 LLM_MODEL=gpt-4o-mini
 EMBEDDING_MODEL=text-embedding-3-small
+
+# ===== 로컬 LLM / Ollama (SYS-F70) =====
+LOCAL_LLM_ENDPOINT=http://localhost:11434
+LOCAL_LLM_MODEL=qwen2.5:3b
+LOCAL_OCR_MODEL=deepseek-vl2
+LOCAL_CLASSIFIER_MODEL=phi3:mini
+LOCAL_EMBEDDING_MODEL=nomic-embed-text
+LOCAL_LLM_CONFIDENCE_THRESHOLD=0.70   # 0.0~1.0, 이 값 미만이면 클라우드 폴백
+
+# ===== 임베딩 프로바이더 (RAG-F16) =====
+EMBEDDING_PROVIDER=local               # "local" | "openai"
+
+# ===== LLM 비용 모니터링 (SYS-F73) =====
+MONTHLY_LLM_BUDGET_USD=50.0            # 월 예산 (0이면 알림 비활성화)
 
 # ===== Vector Store =====
 CHROMA_PERSIST_DIR=./data/chroma_db
@@ -792,9 +971,16 @@ jobs:
 - [ ] `.github/workflows/ci.yml` CI 파이프라인 설정
 - [ ] `docker-compose.yml` Redis + Celery 서비스 추가
 - [ ] `GET /health` 전체 서브시스템 체크 개선
+- [ ] `app/core/llm_router.py` LLMRouter 구현 (SYS-F70)
+- [ ] `app/core/embedding_router.py` 임베딩 프로바이더 전환 (RAG-F16)
+- [ ] `app/core/cost_monitor.py` 모듈별 토큰 사용량 기록 (SYS-F72)
+- [ ] `GET /admin/llm-cost` LLM 비용 대시보드 API (SYS-F72)
+- [ ] Ollama 서비스 `docker-compose.yml` 추가 (Tier 1/2 모델 서빙)
 
 ### P2 (운영 성숙도)
 - [ ] Prometheus 메트릭 엔드포인트 (`/metrics`)
 - [ ] Grafana 대시보드 구성
 - [ ] 감사 로그 5년 아카이빙 전략 (S3 또는 별도 DB)
 - [ ] Presigned URL 캐싱 (CDN 연동)
+- [ ] LLM 비용 월 예산 80% 알림 (SYS-F73) — Slack/이메일 연동
+- [ ] 로컬 모델 폴백률 Prometheus 메트릭 노출 (SYS-F74)

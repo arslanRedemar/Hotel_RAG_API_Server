@@ -195,9 +195,11 @@ class SOPExtractor:
             return "manual"
 ```
 
-### 2-2. 신뢰도 점수 산정 로직
+### 2-2. 신뢰도 점수 산정 및 클라우드 라우팅 로직 (SOP-F15)
 
 ```python
+from app.core.config import settings
+
 def calculate_extraction_confidence(result: dict, original_text: str) -> float:
     """
     신뢰도 산정 기준:
@@ -232,6 +234,17 @@ def calculate_extraction_confidence(result: dict, original_text: str) -> float:
         score += 0.1
 
     return min(round(score, 2), 1.0)
+
+
+def should_route_to_cloud(result: dict, original_text: str) -> bool:
+    """
+    SOP-F15: 로컬 추출 결과를 클라우드 LLM으로 재처리해야 하는지 판단.
+    - 신뢰도 < LOCAL_LLM_CONFIDENCE_THRESHOLD 이면 클라우드 필요
+    - review_required=True 이면 클라우드 필요
+    """
+    threshold = settings.local_llm_confidence_threshold  # default 0.70
+    confidence = calculate_extraction_confidence(result, original_text)
+    return confidence < threshold or result.get("review_required", False)
 ```
 
 ---
