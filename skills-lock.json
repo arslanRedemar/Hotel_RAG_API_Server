@@ -21,6 +21,11 @@
       "sourceType": "github",
       "computedHash": "6cae8c25368173e2d72818c4a29dfdfcca7b51ad9b720454daa2b984d4f24e3c"
     },
+    "langchain-architecture": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "55eb886f6590654361b472e19f4364d5be3011253bec8d0baeca4736f06c8c7c"
+    },
     "langchain-dependencies": {
       "source": "langchain-ai/langchain-skills",
       "sourceType": "github",
