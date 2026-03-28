@@ -124,7 +124,7 @@ from jose import JWTError, jwt
 from app.core.config import settings
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8시간 (호텔 1교대)
+ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 1시간 (SYS-F02)
 
 def create_access_token(data: dict) -> str:
     """
@@ -535,7 +535,7 @@ class HistoryResponse(BaseModel):
 
 # JWT 설정
 SECRET_KEY=your-256-bit-secret-key-here   # openssl rand -hex 32 로 생성
-ACCESS_TOKEN_EXPIRE_MINUTES=480
+ACCESS_TOKEN_EXPIRE_MINUTES=60
 
 # 파일 스토리지
 FILE_STORAGE_PATH=./data/uploads          # 원본 문서 저장 경로

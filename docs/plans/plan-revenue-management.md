@@ -238,10 +238,10 @@ class PMSCollector:
 # app/tasks/revenue_tasks.py
 
 celery_app.conf.beat_schedule.update({
-    # 매일 새벽 2시: 전날 PMS 성과 수집
-    'collect-daily-pms-metrics': {
-        'task': 'app.tasks.revenue_tasks.collect_daily_pms_metrics',
-        'schedule': crontab(hour=2, minute=0),
+    # 매시간: PMS 성과 지표 수집 (RM-F01: 1시간 단위)
+    'collect-hourly-pms-metrics': {
+        'task': 'app.tasks.revenue_tasks.collect_hourly_pms_metrics',
+        'schedule': crontab(minute=0),  # 매 정시
     },
     # 매일 오전 7시: 경쟁사 요율 수집
     'collect-competitor-rates': {
@@ -261,10 +261,10 @@ celery_app.conf.beat_schedule.update({
 })
 
 @celery_app.task
-async def collect_daily_pms_metrics():
-    yesterday = date.today() - timedelta(days=1)
+async def collect_hourly_pms_metrics():
+    target = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
     collector = PMSCollector(settings.pms_base_url, settings.pms_api_key)
-    metrics = await collector.collect_daily_metrics(yesterday)
+    metrics = await collector.collect_daily_metrics(target.date())
     save_daily_metrics(metrics)
 
 @celery_app.task
