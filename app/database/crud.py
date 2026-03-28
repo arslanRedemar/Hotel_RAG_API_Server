@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.database.models import ChatSession, ChatMessage
+from app.database.models import SOP, ChatMessage, ChatSession
 
 
 def get_or_create_session(db: Session, session_id: str) -> ChatSession:
@@ -44,3 +44,25 @@ def delete_session(db: Session, session_id: str) -> bool:
     db.delete(session)
     db.commit()
     return True
+
+
+# ── SOP CRUD ─────────────────────────────────────────────────
+
+
+def get_sop(db: Session, sop_id: str) -> SOP | None:
+    return db.get(SOP, sop_id)
+
+
+def list_sops(
+    db: Session,
+    department_id: int | None = None,
+    status: str | None = None,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[SOP]:
+    q = db.query(SOP)
+    if department_id is not None:
+        q = q.filter(SOP.department_id == department_id)
+    if status:
+        q = q.filter(SOP.status == status)
+    return q.order_by(SOP.created_at.desc()).offset(skip).limit(limit).all()
