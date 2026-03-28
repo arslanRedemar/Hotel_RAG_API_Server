@@ -1,7 +1,9 @@
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(env_file=".env", extra="ignore")
     # ===== 서버 =====
     app_host: str = "0.0.0.0"
     app_port: int = 8000
@@ -68,9 +70,5 @@ class Settings(BaseSettings):
 
     # ===== LLM 비용 모니터링 (SYS-F73) =====
     monthly_llm_budget_usd: float = 0.0        # 0이면 예산 알림 비활성화
-
-    class Config:
-        env_file = ".env"
-
 
 settings = Settings()

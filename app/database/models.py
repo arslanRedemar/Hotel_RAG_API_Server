@@ -187,3 +187,93 @@ class DocumentVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     document: Mapped["Document"] = relationship(back_populates="versions")
+
+
+# ─────────────────────────── SOP ────────────────────────────
+
+
+class SOP(Base):
+    """SOP 디지털화 문서 (draft → active → archived)"""
+
+    __tablename__ = "sops"
+
+    from sqlalchemy import Numeric, UniqueConstraint
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    department_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    version: Mapped[str] = mapped_column(String(20), nullable=False, default="1.0")
+    status: Mapped[str] = mapped_column(
+        Enum("draft", "under_review", "active", "archived", name="sop_status"),
+        nullable=False,
+        default="draft",
+        index=True,
+    )
+    steps: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    checklist_items: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    cautions: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    tags: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    source_file: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    review_required: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    extraction_confidence: Mapped[float | None] = mapped_column(
+        "extraction_confidence", nullable=True
+    )
+    ocr_confidence: Mapped[float | None] = mapped_column("ocr_confidence", nullable=True)
+    chroma_chunk_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    published_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    versions: Mapped[list["SOPVersionHistory"]] = relationship(back_populates="sop")
+    acknowledgements: Mapped[list["SOPAcknowledgement"]] = relationship(back_populates="sop")
+
+
+class SOPVersionHistory(Base):
+    """SOP 버전 이력 스냅샷"""
+
+    __tablename__ = "sop_version_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sop_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("sops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version: Mapped[str] = mapped_column(String(20), nullable=False)
+    snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
+    changed_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    change_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    sop: Mapped["SOP"] = relationship(back_populates="versions")
+
+
+class SOPAcknowledgement(Base):
+    """SOP 확인(Acknowledge) 기록"""
+
+    __tablename__ = "sop_acknowledgements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sop_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("sops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version: Mapped[str] = mapped_column(String(20), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    acked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    sop: Mapped["SOP"] = relationship(back_populates="acknowledgements")
