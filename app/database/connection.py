@@ -5,12 +5,22 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 
 from app.core.config import settings
 
+_url = settings.mysql_url
+_is_sqlite = _url.startswith("sqlite")
+
 engine = create_engine(
-    settings.mysql_url,
-    pool_pre_ping=True,   # 연결 끊김 자동 감지
-    pool_recycle=3600,    # 1시간마다 커넥션 재사용
-    pool_size=10,
-    max_overflow=20,
+    _url,
+    **(
+        {}
+        if _is_sqlite
+        else {
+            "pool_pre_ping": True,
+            "pool_recycle": 3600,
+            "pool_size": 10,
+            "max_overflow": 20,
+        }
+    ),
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
 )
 
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
