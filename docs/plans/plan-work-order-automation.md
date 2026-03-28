@@ -284,8 +284,8 @@ class AutoAssigner:
 
     def _get_sla(self, severity: str) -> dict:
         sla_map = {
-            "critical": {"assign_limit_min": 5,   "complete_limit_min": 120,  "escalate_at_min": 10},
-            "high":     {"assign_limit_min": 15,  "complete_limit_min": 240,  "escalate_at_min": 30},
+            "critical": {"assign_limit_min": 5,   "complete_limit_min": 120,  "escalate_at_min": 5},   # WO-F22
+            "high":     {"assign_limit_min": 15,  "complete_limit_min": 240,  "escalate_at_min": 15},  # WO-F22
             "medium":   {"assign_limit_min": 60,  "complete_limit_min": 480,  "escalate_at_min": 120},
             "low":      {"assign_limit_min": 240, "complete_limit_min": 4320, "escalate_at_min": 480},
         }

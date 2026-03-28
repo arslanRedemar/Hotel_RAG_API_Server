@@ -24,8 +24,8 @@ class AnomalyDetector:
     D. 에너지 이상 — 사용량 평균 대비 X% 급증 (CA-F22)
     """
 
-    def detect_repeat_ng(self, template_id: str, item_id: str, days: int = 14) -> dict | None:
-        """동일 항목이 14일 내 3회 이상 NG → 패턴 감지"""
+    def detect_repeat_ng(self, template_id: str, item_id: str, days: int = 28) -> dict | None:
+        """동일 항목이 28일(4주) 내 3회 이상 NG → 패턴 감지 (CA-F20)"""
         since = datetime.utcnow() - timedelta(days=days)
         records = get_inspection_records_by_template(template_id, since=since)
 
@@ -72,21 +72,22 @@ class AnomalyDetector:
                 zone_ng[key]["count"] += len(ng_items)
                 zone_ng[key]["records"].append(record["id"])
 
-        # 전체 평균 대비 2배 이상인 구역 → 이상
-        all_counts = [v["count"] for v in zone_ng.values() if v["count"] > 0]
-        if not all_counts:
-            return []
-        avg_count = sum(all_counts) / len(all_counts)
+        # 해당 구역의 전체 점검 항목 중 NG 비율이 30% 초과인 구역 → 이상 (CA-F21)
+        total_items_by_zone: dict[str, int] = defaultdict(int)
+        for record in records:
+            total_items_by_zone[record["location"]] += len(record["items"])
 
         anomalies = []
         for location, data in zone_ng.items():
-            if data["count"] >= 5 and data["count"] > avg_count * 2:
+            total = total_items_by_zone[location]
+            ng_ratio = data["count"] / total if total > 0 else 0
+            if ng_ratio > 0.30:
                 anomalies.append({
                     "type": "zone_concentration",
                     "severity": "high",
                     "location": location,
                     "ng_count": data["count"],
-                    "avg_count": round(avg_count, 1),
+                    "ng_ratio_pct": round(ng_ratio * 100, 1),
                     "record_ids": data["records"],
                     "recommendation": f"{location} 구역에서 {days}일간 NG {data['count']}건 집중 발생. 구조적 문제 점검 필요."
                 })
