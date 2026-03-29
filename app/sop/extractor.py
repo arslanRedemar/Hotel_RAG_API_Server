@@ -93,6 +93,14 @@ _FALLBACK_RESULT: dict = {
     "extraction_confidence": 0.0,
 }
 
+# 의미 없는 placeholder 제목 목록
+PLACEHOLDER_TITLES: frozenset[str] = frozenset({
+    "분할 추출 문서",
+    "추출 실패",
+    "처리중",
+    "",
+})
+
 
 # ── 신뢰도 산정 ───────────────────────────────────────────────
 
@@ -203,9 +211,15 @@ class SOPExtractor:
         all_steps: list = []
         all_checklist: list = []
         all_cautions: list = []
+        title = ""
 
-        for chunk in chunks:
+        for idx, chunk in enumerate(chunks):
             r = self.extract(chunk)
+            # 첫 청크에서 추출한 제목 사용 (placeholder 아닌 경우)
+            if idx == 0:
+                candidate = r.get("title", "")
+                if candidate and candidate not in PLACEHOLDER_TITLES:
+                    title = candidate
             for step in r.get("steps", []):
                 step["step_no"] = len(all_steps) + 1
                 all_steps.append(step)
@@ -213,7 +227,7 @@ class SOPExtractor:
             all_cautions.extend(r.get("cautions", []))
 
         return {
-            "title": "분할 추출 문서",
+            "title": title,   # 빈 문자열이면 sop_tasks에서 원본 파일명으로 대체
             "steps": all_steps,
             "checklist_items": all_checklist,
             "cautions": list(dict.fromkeys(all_cautions)),  # 중복 제거

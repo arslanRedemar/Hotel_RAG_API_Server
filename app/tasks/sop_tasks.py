@@ -70,8 +70,22 @@ def _run_extract_sop(
         # AI 구조 추출
         extraction = extractor.extract(full_text)
 
-        # SOP 업데이트
-        sop.title = extraction.get("title") or Path(file_path).stem
+        # ── 제목 결정 (우선순위) ────────────────────────────────
+        # 1. AI가 추출한 의미있는 제목
+        # 2. 업로드 시 저장된 원본 파일명 (sop.title에 file.filename으로 저장됨)
+        # 3. source_file 경로의 stem (UUID 기반이므로 최후 수단)
+        from app.sop.extractor import PLACEHOLDER_TITLES
+
+        extracted_title = extraction.get("title", "")
+        if extracted_title and extracted_title not in PLACEHOLDER_TITLES:
+            resolved_title = extracted_title
+        elif sop.title and sop.title not in PLACEHOLDER_TITLES:
+            # 원본 파일명에서 확장자 제거 (예: "checkin_sop.pdf" → "checkin_sop")
+            resolved_title = Path(sop.title).stem
+        else:
+            resolved_title = Path(file_path).stem
+
+        sop.title = resolved_title
         sop.department_id = department_id
         sop.steps = extraction.get("steps", [])
         sop.checklist_items = extraction.get("checklist_items", [])
