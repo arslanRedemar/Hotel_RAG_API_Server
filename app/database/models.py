@@ -483,3 +483,148 @@ class InspectionCorrectiveAction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     record: Mapped["InspectionRecord"] = relationship(back_populates="corrective_actions")
+
+
+# ─────────────────────── Revenue Management ──────────────────
+
+from sqlalchemy import Date, UniqueConstraint  # noqa: E402
+
+
+class DailyMetrics(Base):
+    """일간 성과 지표 (PMS에서 수집)"""
+
+    __tablename__ = "daily_metrics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    report_date: Mapped[datetime] = mapped_column(Date, nullable=False, unique=True)
+    total_rooms: Mapped[int] = mapped_column(Integer, nullable=False)
+    occupied_rooms: Mapped[int] = mapped_column(Integer, nullable=False)
+    occupancy_rate: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
+    adr: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    revpar: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    total_revenue: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
+    channel_breakdown: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    ota_commission: Mapped[float | None] = mapped_column(Numeric(15, 2), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ReservationPickup(Base):
+    """예약 픽업 이력 (수요 예측용)"""
+
+    __tablename__ = "reservation_pickups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    stay_date: Mapped[datetime] = mapped_column(Date, nullable=False)
+    snapshot_date: Mapped[datetime] = mapped_column(Date, nullable=False)
+    confirmed_rooms: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_rooms: Mapped[int] = mapped_column(Integer, nullable=False)
+    pickup_rate: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
+
+    __table_args__ = (UniqueConstraint("stay_date", "snapshot_date", name="uq_stay_snapshot"),)
+
+
+class CompetitorRate(Base):
+    """경쟁사 요율 (일간 수집)"""
+
+    __tablename__ = "competitor_rates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    snapshot_date: Mapped[datetime] = mapped_column(Date, nullable=False)
+    stay_date: Mapped[datetime] = mapped_column(Date, nullable=False)
+    competitor_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    rate_min: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    rate_max: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    is_soldout: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    room_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class LocalEvent(Base):
+    """로컬 이벤트"""
+
+    __tablename__ = "local_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(300), nullable=False)
+    type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    start_date: Mapped[datetime] = mapped_column(Date, nullable=False)
+    end_date: Mapped[datetime] = mapped_column(Date, nullable=False)
+    venue: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    expected_attendance: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    impact_level: Mapped[str] = mapped_column(
+        Enum("low", "medium", "high", "very_high", name="event_impact"),
+        nullable=False,
+        default="medium",
+    )
+    source: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class RateRecommendation(Base):
+    """AI 요율 권고"""
+
+    __tablename__ = "rate_recommendations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    recommendation_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    stay_date: Mapped[datetime] = mapped_column(Date, nullable=False)
+    recommended_rate: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    current_rate: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    rate_change_pct: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    reasoning: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[float | None] = mapped_column(Numeric(4, 3), nullable=True)
+    los_restriction: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    action_taken: Mapped[str] = mapped_column(
+        Enum("accepted", "modified", "rejected", "pending", name="rec_action"),
+        nullable=False,
+        default="pending",
+    )
+    actual_rate_applied: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    decided_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class DemandForecast(Base):
+    """수요 예측 결과"""
+
+    __tablename__ = "demand_forecasts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    forecast_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    stay_date: Mapped[datetime] = mapped_column(Date, nullable=False)
+    predicted_occupancy_base: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    predicted_occupancy_opt: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    predicted_occupancy_pess: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    actual_occupancy: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    mape: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+
+    __table_args__ = (UniqueConstraint("forecast_date", "stay_date", name="uq_forecast_stay"),)
+
+
+class GroupBookingSimulation(Base):
+    """단체 예약 시뮬레이션 이력"""
+
+    __tablename__ = "group_booking_simulations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rooms_requested: Mapped[int] = mapped_column(Integer, nullable=False)
+    check_in: Mapped[datetime] = mapped_column(Date, nullable=False)
+    check_out: Mapped[datetime] = mapped_column(Date, nullable=False)
+    proposed_rate: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    simulated_accept_revenue: Mapped[float | None] = mapped_column(Numeric(15, 2), nullable=True)
+    simulated_reject_revenue: Mapped[float | None] = mapped_column(Numeric(15, 2), nullable=True)
+    opportunity_cost: Mapped[float | None] = mapped_column(Numeric(15, 2), nullable=True)
+    recommendation: Mapped[str] = mapped_column(
+        Enum("accept", "reject", "negotiate", name="group_rec"),
+        nullable=False,
+    )
+    recommendation_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
