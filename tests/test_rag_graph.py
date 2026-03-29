@@ -1,7 +1,6 @@
 """RAG 그래프 (LangGraph) 단위 테스트 (TDD)"""
 
 from unittest.mock import MagicMock, patch
-import pytest
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -109,7 +108,6 @@ class TestChatFunction:
             chat("my-session-id", "질문")
 
         call_kwargs = mock_graph.invoke.call_args
-        config = call_kwargs[1].get("config", {}) or (call_kwargs[0][1] if len(call_kwargs[0]) > 1 else {})
         assert "my-session-id" in str(call_kwargs)
 
 
@@ -161,9 +159,8 @@ class TestDepartmentFilterRetriever:
         mock_vs.as_retriever.return_value = mock_retriever
 
         with patch("app.rag.graph.get_vector_store", return_value=mock_vs):
-            retriever = _build_retriever(department_ids=[1, 2])
+            _build_retriever(department_ids=[1, 2])
 
-        call_kwargs = mock_vs.as_retriever.call_args[1] or mock_vs.as_retriever.call_args[0][0]
         # filter가 search_kwargs에 포함되어야 함
         assert mock_vs.as_retriever.called
 
@@ -173,7 +170,7 @@ class TestDepartmentFilterRetriever:
         mock_vs.as_retriever.return_value = MagicMock()
 
         with patch("app.rag.graph.get_vector_store", return_value=mock_vs):
-            retriever = _build_retriever(department_ids=None)
+            _build_retriever(department_ids=None)
 
         assert mock_vs.as_retriever.called
 
@@ -239,8 +236,6 @@ class TestBuildGraphNodes:
 
     def test_get_graph_is_singleton(self):
         """get_graph()가 동일 인스턴스를 반환하는지 확인"""
-        import app.rag.graph as graph_mod
-        import importlib
 
         from app.rag.graph import get_graph
         # 두 번 호출해도 같은 객체여야 함

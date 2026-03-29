@@ -1,9 +1,7 @@
 """RAG 문서 관리 API 통합 테스트 (TDD)"""
 
-import io
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 
 def _auth(token: str) -> dict:

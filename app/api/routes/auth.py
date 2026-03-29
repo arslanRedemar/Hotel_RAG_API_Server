@@ -1,18 +1,17 @@
 """인증 API — /auth"""
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from jose import JWTError
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.audit.logger import audit_log
 from app.auth.dependencies import (
     CurrentUser,
     blacklist_token,
-    get_current_user,
 )
 from app.auth.jwt import (
     create_access_token,
@@ -20,7 +19,6 @@ from app.auth.jwt import (
     verify_refresh_token,
 )
 from app.auth.password import verify_password
-from app.core.config import settings
 from app.database.connection import get_db
 from app.database.models import User
 
@@ -32,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 

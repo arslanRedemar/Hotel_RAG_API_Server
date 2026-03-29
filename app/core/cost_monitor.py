@@ -1,7 +1,7 @@
 """LLM 토큰 사용량 및 비용 모니터링 (SYS-F72, SYS-F73)"""
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from threading import Lock
 
 logger = logging.getLogger(__name__)

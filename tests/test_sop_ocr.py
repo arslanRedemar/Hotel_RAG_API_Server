@@ -1,9 +1,7 @@
 """SOP OCR 모듈 단위 테스트"""
 
-import io
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 
-import pytest
 from PIL import Image
 
 from app.sop.ocr import OCRProcessor, preprocess_image, extract_structured_text
@@ -108,7 +106,6 @@ class TestScannedPDFExtraction:
         ocr.threshold = 0.90  # 강제로 높게 설정
 
         fake_image = _make_white_image()
-        mock_data = {"text": ["text"], "conf": [50]}
 
         with patch("pdf2image.convert_from_path", return_value=[fake_image]):
             with patch.object(ocr, "_local_vision_ocr", return_value=("로컬결과", 0.50)):
@@ -313,7 +310,6 @@ class TestScannedPDFExtractionExtended:
         """engine='google_vision' 으로 직접 호출"""
         ocr = OCRProcessor(engine="google_vision")
         fake_image = _make_white_image()
-        mock_data = {"text": ["직접호출"], "conf": [85]}
 
         with patch("pdf2image.convert_from_path", return_value=[fake_image]):
             with patch.object(ocr, "_google_vision_ocr", return_value=("구글결과", 0.95)):

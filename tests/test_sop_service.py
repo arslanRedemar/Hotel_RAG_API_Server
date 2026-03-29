@@ -1,11 +1,9 @@
 """SOP Service 통합 테스트 (인메모리 SQLite)"""
 
-import json
 from unittest.mock import MagicMock, patch
 
-import pytest
 
-from app.database.models import SOP, SOPAcknowledgement, SOPVersionHistory
+from app.database.models import SOP, SOPVersionHistory
 from app.sop.service import SOPService
 
 

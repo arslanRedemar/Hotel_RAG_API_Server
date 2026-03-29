@@ -8,4 +8,4 @@ __pycache__/
 .gitignore
 data/chroma_db/
 *.md
-tests/
+

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.database.models import SOP, SOPAcknowledgement, SOPVersionHistory, User
+from app.database.models import SOP, SOPAcknowledgement, SOPVersionHistory
 from app.sop.extractor import SOPExtractor
 from app.sop.ocr import OCRProcessor
 

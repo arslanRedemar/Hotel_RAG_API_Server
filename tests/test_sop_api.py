@@ -1,13 +1,9 @@
 """SOP API 엔드포인트 통합 테스트"""
 
-import io
-import json
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from app.database.models import SOP
-from app.sop.service import SOPService
 
 
 def _auth(token: str) -> dict:
