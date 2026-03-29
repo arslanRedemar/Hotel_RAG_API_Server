@@ -6,6 +6,7 @@ from typing import Optional
 class SourceDocument(BaseModel):
     """RAG-F11: 출처 문서 상세 정보"""
     source: str
+    display_name: str = ""          # 사람이 읽기 쉬운 문서명 (SOP 제목 or 파일명)
     page: Optional[int] = None
     section: Optional[str] = None
     chunk_preview: str = ""

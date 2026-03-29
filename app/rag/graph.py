@@ -42,11 +42,40 @@ SYSTEM_PROMPT = """\
 class SourceDetail:
     """RAG-F11: 출처 문서 상세 정보"""
     source: str
+    display_name: str = ""          # 사람이 읽기 쉬운 문서명
     page: Optional[int] = None
     section: Optional[str] = None
     chunk_preview: str = ""
     doc_type: Optional[str] = None
     department_id: Optional[str] = None
+
+
+def _readable_label(meta: dict) -> str:
+    """메타데이터에서 사람이 읽기 쉬운 문서 레이블 생성.
+
+    우선순위:
+    1. title 메타데이터 (유효한 경우)
+    2. 파일 경로에서 stem 추출
+    3. source 원본값
+    """
+    from pathlib import Path as _Path
+
+    PLACEHOLDER_TITLES = {"분할 추출 문서", "", None}
+
+    title = meta.get("title")
+    if title and title not in PLACEHOLDER_TITLES:
+        return title
+
+    source = meta.get("source", "")
+    if not source:
+        return "문서"
+
+    # sop/{uuid} → "SOP 문서" (DB 조회 전 기본값)
+    if source.startswith("sop/"):
+        return f"SOP ({source[4:12]}...)"
+
+    # 파일 경로 → 파일명 stem (예: "data/docs/checkin_sop.txt" → "checkin_sop")
+    return _Path(source).stem or source
 
 
 def build_source_detail(doc: Document) -> SourceDetail:
@@ -57,6 +86,7 @@ def build_source_detail(doc: Document) -> SourceDetail:
         preview += "..."
     return SourceDetail(
         source=meta.get("source", ""),
+        display_name=_readable_label(meta),
         page=meta.get("page"),
         section=meta.get("section"),
         chunk_preview=preview,
@@ -121,7 +151,7 @@ def _build_graph():
     def generate(state: RAGState) -> dict:
         docs = state.get("context", [])
         context_text = "\n\n".join(
-            f"[{doc.metadata.get('source', '문서')}] {doc.page_content}"
+            f"[{_readable_label(doc.metadata or {})}] {doc.page_content}"
             for doc in docs
         )
         system_msg = SystemMessage(
