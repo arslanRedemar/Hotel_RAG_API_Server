@@ -14,6 +14,10 @@ def _make_mock_vectorstore():
     return vs
 
 
+def _make_mock_embeddings():
+    return MagicMock()
+
+
 # ── ingest_documents ─────────────────────────────────────────
 
 class TestIngestDocuments:
@@ -26,8 +30,9 @@ class TestIngestDocuments:
     def test_raises_if_no_documents(self, tmp_path):
         from app.rag.ingest import ingest_documents
         with patch("app.rag.ingest.get_vector_store", return_value=_make_mock_vectorstore()):
-            with pytest.raises(ValueError, match="인제스트할 문서"):
-                ingest_documents(str(tmp_path))
+            with patch("app.rag.ingest.get_embeddings", return_value=_make_mock_embeddings()):
+                with pytest.raises(ValueError, match="인제스트할 문서"):
+                    ingest_documents(str(tmp_path))
 
     def test_loads_txt_file(self, tmp_path):
         from app.rag.ingest import ingest_documents
@@ -35,7 +40,8 @@ class TestIngestDocuments:
         mock_vs = _make_mock_vectorstore()
 
         with patch("app.rag.ingest.get_vector_store", return_value=mock_vs):
-            result = ingest_documents(str(tmp_path))
+            with patch("app.rag.ingest.get_embeddings", return_value=_make_mock_embeddings()):
+                result = ingest_documents(str(tmp_path))
 
         assert isinstance(result, dict)
         assert result["chunk_count"] > 0
@@ -46,7 +52,8 @@ class TestIngestDocuments:
         mock_vs = _make_mock_vectorstore()
 
         with patch("app.rag.ingest.get_vector_store", return_value=mock_vs):
-            result = ingest_documents(str(tmp_path))
+            with patch("app.rag.ingest.get_embeddings", return_value=_make_mock_embeddings()):
+                result = ingest_documents(str(tmp_path))
 
         assert "elapsed_ms" in result
         assert result["elapsed_ms"] >= 0
@@ -60,9 +67,10 @@ class TestIngestDocuments:
         mock_doc = Document(page_content="DOCX 내용", metadata={"source": str(docx_path)})
 
         with patch("app.rag.ingest.get_vector_store", return_value=mock_vs):
-            with patch("app.rag.ingest.Docx2txtLoader") as MockLoader:
-                MockLoader.return_value.load.return_value = [mock_doc]
-                result = ingest_documents(str(tmp_path))
+            with patch("app.rag.ingest.get_embeddings", return_value=_make_mock_embeddings()):
+                with patch("app.rag.ingest.Docx2txtLoader") as MockLoader:
+                    MockLoader.return_value.load.return_value = [mock_doc]
+                    result = ingest_documents(str(tmp_path))
 
         assert result["chunk_count"] > 0
 
@@ -79,7 +87,8 @@ class TestIngestDocuments:
         mock_vs.add_documents.side_effect = capture_add
 
         with patch("app.rag.ingest.get_vector_store", return_value=mock_vs):
-            ingest_documents(str(tmp_path), department_id=3, uploaded_by=1, version="2.0")
+            with patch("app.rag.ingest.get_embeddings", return_value=_make_mock_embeddings()):
+                ingest_documents(str(tmp_path), department_id=3, uploaded_by=1, version="2.0")
 
         assert len(added_chunks) > 0
         meta = added_chunks[0].metadata
@@ -94,7 +103,8 @@ class TestIngestDocuments:
         mock_vs = _make_mock_vectorstore()
 
         with patch("app.rag.ingest.get_vector_store", return_value=mock_vs) as mock_vs_fn:
-            ingest_documents(str(tmp_path))
+            with patch("app.rag.ingest.get_embeddings", return_value=_make_mock_embeddings()):
+                ingest_documents(str(tmp_path))
 
         # get_vector_store가 호출되어야 함 (내부에서 embedding_router 사용)
         mock_vs_fn.assert_called_once()
@@ -120,7 +130,8 @@ class TestIngestSOPToVectorStore:
         mock_vs = _make_mock_vectorstore()
 
         with patch("app.rag.ingest.get_vector_store", return_value=mock_vs):
-            ids = ingest_sop_to_vector_store(self._make_sop())
+            with patch("app.rag.ingest.get_embeddings", return_value=_make_mock_embeddings()):
+                ids = ingest_sop_to_vector_store(self._make_sop())
 
         assert isinstance(ids, list)
         assert len(ids) > 0
@@ -137,7 +148,8 @@ class TestIngestSOPToVectorStore:
         mock_vs.add_documents.side_effect = capture
 
         with patch("app.rag.ingest.get_vector_store", return_value=mock_vs):
-            ingest_sop_to_vector_store(self._make_sop())
+            with patch("app.rag.ingest.get_embeddings", return_value=_make_mock_embeddings()):
+                ingest_sop_to_vector_store(self._make_sop())
 
         meta = added_docs[0].metadata
         assert meta["source_id"] == "sop-001"
@@ -152,7 +164,8 @@ class TestIngestSOPToVectorStore:
         mock_vs.add_documents.side_effect = lambda docs, **kw: (added_docs.extend(docs), ["id1"])[1]
 
         with patch("app.rag.ingest.get_vector_store", return_value=mock_vs):
-            ingest_sop_to_vector_store(self._make_sop())
+            with patch("app.rag.ingest.get_embeddings", return_value=_make_mock_embeddings()):
+                ingest_sop_to_vector_store(self._make_sop())
 
         all_content = " ".join(d.page_content for d in added_docs)
         assert "고객 맞이" in all_content
@@ -170,7 +183,8 @@ class TestDeleteDocumentChunks:
         mock_vs._collection.get.return_value = {"ids": ["chunk1", "chunk2"]}
 
         with patch("app.rag.ingest.get_vector_store", return_value=mock_vs):
-            deleted = delete_document_chunks("doc-001")
+            with patch("app.rag.ingest.get_embeddings", return_value=_make_mock_embeddings()):
+                deleted = delete_document_chunks("doc-001")
 
         assert deleted >= 0
 
@@ -180,6 +194,7 @@ class TestDeleteDocumentChunks:
         mock_vs._collection.get.return_value = {"ids": []}
 
         with patch("app.rag.ingest.get_vector_store", return_value=mock_vs):
-            deleted = delete_document_chunks("nonexistent-id")
+            with patch("app.rag.ingest.get_embeddings", return_value=_make_mock_embeddings()):
+                deleted = delete_document_chunks("nonexistent-id")
 
         assert deleted == 0
