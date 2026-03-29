@@ -79,7 +79,7 @@ jobs:
       - name: Run tests (SQLite in-memory)
         env:
           OPENAI_API_KEY: test-key
-          MYSQL_URL: sqlite:///:memory:
+          MYSQL_URL: "sqlite:///:memory:"
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: test-secret-key-32-characters-xxxx
           EMBEDDING_PROVIDER: openai
