@@ -2,7 +2,6 @@ from datetime import datetime
 
 from sqlalchemy import (
     JSON,
-    BigInteger,
     Boolean,
     DateTime,
     Enum,
@@ -47,6 +46,9 @@ class User(Base):
     )
     skill_tags: Mapped[list | None] = mapped_column(JSON, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # SYS-F06: 계정 잠금
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -60,7 +62,7 @@ class AuditLog(Base):
 
     __tablename__ = "audit_logs"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     action: Mapped[str] = mapped_column(String(50), nullable=False)
     entity_type: Mapped[str] = mapped_column(String(100), nullable=False)
     entity_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -207,7 +209,7 @@ class SOP(Base):
     )
     version: Mapped[str] = mapped_column(String(20), nullable=False, default="1.0")
     status: Mapped[str] = mapped_column(
-        Enum("draft", "under_review", "active", "archived", name="sop_status"),
+        Enum("processing", "failed", "draft", "under_review", "active", "archived", name="sop_status"),
         nullable=False,
         default="draft",
         index=True,
@@ -606,6 +608,37 @@ class DemandForecast(Base):
     __table_args__ = (UniqueConstraint("forecast_date", "stay_date", name="uq_forecast_stay"),)
 
 
+class LoadTestResult(Base):
+    """CI/CD 부하 테스트 결과 이력 (Admin Panel ADMIN-F80)"""
+
+    __tablename__ = "load_test_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ci_run_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    branch: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    commit_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    triggered_by: Mapped[str] = mapped_column(
+        Enum("ci", "manual", name="load_test_trigger"),
+        nullable=False,
+        default="ci",
+    )
+    test_scenario: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    p50_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    p95_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    p99_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    avg_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_rate_pct: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    req_per_sec: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    max_vus: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_sec: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sla_passed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    raw_report_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False, index=True
+    )
+
+
 class GroupBookingSimulation(Base):
     """단체 예약 시뮬레이션 이력"""
 
@@ -628,3 +661,26 @@ class GroupBookingSimulation(Base):
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class NotificationLog(Base):
+    """SYS-F12: 알림 발송 이력"""
+
+    __tablename__ = "notification_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    channel: Mapped[str] = mapped_column(
+        Enum("email", "push", "sms", name="notif_channel"), nullable=False
+    )
+    subject: Mapped[str] = mapped_column(String(500), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    recipient_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(
+        Enum("sent", "failed", "skipped", name="notif_status"), nullable=False
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

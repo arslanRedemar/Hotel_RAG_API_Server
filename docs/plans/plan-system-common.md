@@ -18,6 +18,8 @@
 | CORS 설정 | ✅ | `main.py` |
 | 헬스 체크 엔드포인트 | ✅ | `main.py` |
 | JWT 인증, 역할 기반 권한 | ✅ | `app/auth/` |
+| SYS-F06 계정 잠금 (5회 실패 → 30분 잠금, HTTP 423) | ✅ | `app/auth/lockout.py` |
+| SYS-F12 알림 발송 이력 DB 저장 + 조회 API | ✅ | `app/notifications/service.py`, `app/api/routes/admin.py` |
 | 알림 시스템 (Email/Web Push) | ✅ | `app/notifications/` |
 | 파일 저장소 (업로드/Presigned URL) | ✅ | `app/storage/service.py` |
 | 감사 로그 (불변) | ✅ | `app/audit/logger.py` |
@@ -957,30 +959,30 @@ jobs:
 ## 8. 구현 체크리스트
 
 ### P0 (최우선 — 모든 기능의 전제)
-- [ ] `app/auth/` 모듈 완성 (JWT, bcrypt, Depends)
-- [ ] `users`, `departments` DB 테이블 + 시드 데이터
-- [ ] 모든 기존 API에 인증 미들웨어 적용
-- [ ] `app/storage/service.py` 파일 저장소 구현
-- [ ] `audit_logs` 테이블 + `AuditLogger` 구현
-- [ ] `app/core/logging.py` JSON 구조화 로그 적용
+- [x] `app/auth/` 모듈 완성 (JWT, bcrypt, Depends)
+- [x] `users`, `departments` DB 테이블 + 시드 데이터
+- [x] 모든 기존 API에 인증 미들웨어 적용
+- [x] `app/storage/service.py` 파일 저장소 구현
+- [x] `audit_logs` 테이블 + `AuditLogger` 구현
+- [x] `app/core/logging.py` JSON 구조화 로그 적용
 
 ### P1 (기능 확장 단계)
-- [ ] `app/notifications/` 이메일/푸시 알림 모듈
-- [ ] `app/core/circuit_breaker.py` OpenAI API에 적용
-- [ ] `app/core/middleware.py` 요청 로그 + 메트릭 미들웨어
-- [ ] `.github/workflows/ci.yml` CI 파이프라인 설정
-- [ ] `docker-compose.yml` Redis + Celery 서비스 추가
-- [ ] `GET /health` 전체 서브시스템 체크 개선
-- [ ] `app/core/llm_router.py` LLMRouter 구현 (SYS-F70)
-- [ ] `app/core/embedding_router.py` 임베딩 프로바이더 전환 (RAG-F16)
-- [ ] `app/core/cost_monitor.py` 모듈별 토큰 사용량 기록 (SYS-F72)
-- [ ] `GET /admin/llm-cost` LLM 비용 대시보드 API (SYS-F72)
-- [ ] Ollama 서비스 `docker-compose.yml` 추가 (Tier 1/2 모델 서빙)
+- [x] `app/notifications/` 이메일/푸시 알림 모듈
+- [x] `app/core/circuit_breaker.py` OpenAI API에 적용 — `LLMRouter.safe_invoke()` (SYS-F41)
+- [x] `app/core/middleware.py` 요청 로그 + 메트릭 미들웨어
+- [x] `.github/workflows/ci.yml` CI 파이프라인 설정
+- [x] `docker-compose.yml` Redis + Celery 서비스 추가
+- [x] `GET /health` 전체 서브시스템 체크 개선
+- [x] `app/core/llm_router.py` LLMRouter 구현 (SYS-F70)
+- [x] `app/core/embedding_router.py` 임베딩 프로바이더 전환 (RAG-F16)
+- [x] `app/core/cost_monitor.py` 모듈별 토큰 사용량 기록 (SYS-F72)
+- [x] `GET /admin/llm-cost` LLM 비용 대시보드 API (SYS-F72)
+- [x] Ollama 서비스 `docker-compose.yml` 추가 (profile: `local-llm`)
 
 ### P2 (운영 성숙도)
-- [ ] Prometheus 메트릭 엔드포인트 (`/metrics`)
-- [ ] Grafana 대시보드 구성
-- [ ] 감사 로그 5년 아카이빙 전략 (S3 또는 별도 DB)
-- [ ] Presigned URL 캐싱 (CDN 연동)
-- [ ] LLM 비용 월 예산 80% 알림 (SYS-F73) — Slack/이메일 연동
-- [ ] 로컬 모델 폴백률 Prometheus 메트릭 노출 (SYS-F74)
+- [x] Prometheus 메트릭 엔드포인트 (`/metrics`) — circuits + api + llm 통계 포함
+- [x] Grafana 대시보드 구성 — `docker-compose.yml` profile: `monitoring` (포트 3002)
+- [x] 감사 로그 5년 아카이빙 전략 — `archive_old_logs()` JSONL 파일 내보내기
+- [x] Presigned URL 캐싱 — 인메모리 TTL 캐시 300초 (`FileStorageService._url_cache`)
+- [x] LLM 비용 월 예산 80% 알림 (SYS-F73) — `_check_budget_alert()` 경고 로그
+- [x] 로컬 모델 폴백률 Prometheus 메트릭 노출 (SYS-F74) — `/metrics` `llm.fallback_rate_pct`

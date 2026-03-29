@@ -271,8 +271,13 @@ class InspectionService:
         completed_by: int,
         work_order_id: Optional[str] = None,
         verification_photo_url: Optional[str] = None,
+        auto_create_wo: bool = False,
     ) -> dict:
         from app.database.models import InspectionCorrectiveAction
+
+        # CA-F06: NG 항목 → Work Order 자동 생성
+        if auto_create_wo and work_order_id is None:
+            work_order_id = self._create_wo_from_ng(record_id, item_id, action, completed_by)
 
         ca = InspectionCorrectiveAction(
             record_id=record_id,
@@ -286,6 +291,43 @@ class InspectionService:
         self.db.add(ca)
         self.db.flush()
         return self._corrective_action_to_dict(ca)
+
+    def _create_wo_from_ng(
+        self, record_id: str, item_id: str, action: str, reported_by: int
+    ) -> Optional[str]:
+        """NG 점검 항목에서 Work Order를 자동 생성 (CA-F06 × WO-F01)"""
+        try:
+            from app.database.models import InspectionRecord, InspectionTemplate
+            from app.work_order.service import WorkOrderService
+
+            record = self.db.query(InspectionRecord).filter_by(id=record_id).first()
+            if not record:
+                return None
+
+            tpl = self.db.query(InspectionTemplate).filter_by(id=record.template_id).first()
+            item_def: dict = {}
+            if tpl:
+                item_def = next(
+                    (i for i in (tpl.items or []) if i["id"] == item_id), {}
+                )
+
+            category = item_def.get("category", "기타")
+            description = (
+                f"[점검 NG 자동 생성] {record.location} — "
+                f"{item_def.get('description', item_id)}: {action}"
+            )
+
+            wo_svc = WorkOrderService(self.db)
+            wo = wo_svc.create_work_order(
+                description=description,
+                reported_by=reported_by,
+                location=record.location,
+                category=category,
+            )
+            return wo.get("id")
+        except Exception as exc:
+            logger.warning("NG→WO 자동 생성 실패: %s", exc)
+            return None
 
     def get_corrective_actions(self, record_id: str) -> list[dict]:
         from app.database.models import InspectionCorrectiveAction

@@ -75,7 +75,62 @@ services:
       retries: 5
     restart: unless-stopped
 
+  admin:
+    build: ./hotel-ax-admin
+    container_name: hotel_ax_admin
+    ports:
+      - "3001:3000"
+    environment:
+      - HOTEL_API_URL=http://api:8000
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3001}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-hotel-ax}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/auth/providers"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── 로컬 LLM (SYS-F70 Tier 1/2) ─────────────────────────────
+  # docker-compose --profile local-llm up 으로 선택 실행
+  ollama:
+    image: ollama/ollama:latest
+    container_name: hotel_ax_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    restart: unless-stopped
+    profiles:
+      - local-llm
+
+  # ── 모니터링 (P2) ─────────────────────────────────────────────
+  # docker-compose --profile monitoring up 으로 선택 실행
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: hotel_ax_grafana
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
 volumes:
   mysql_data:
   redis_data:
   chroma_data:
+  ollama_data:
+  grafana_data:

@@ -63,6 +63,7 @@ class CorrectiveActionCreate(BaseModel):
     action: str
     work_order_id: Optional[str] = None
     verification_photo_url: Optional[str] = None
+    auto_create_wo: bool = False  # CA-F06: True면 WO 자동 생성
 
 
 class ScheduleGenerateRequest(BaseModel):
@@ -244,6 +245,7 @@ def add_corrective_action(
         completed_by=current_user.id,
         work_order_id=body.work_order_id,
         verification_photo_url=body.verification_photo_url,
+        auto_create_wo=body.auto_create_wo,
     )
 
 

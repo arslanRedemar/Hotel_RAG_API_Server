@@ -1,6 +1,11 @@
 {
   "version": 1,
   "skills": {
+    "clerk-nextjs-patterns": {
+      "source": "clerk/skills",
+      "sourceType": "github",
+      "computedHash": "bc6a67a7a9daf4edf969d529d27ff64dea79b597c20d97d36eac52804934c78b"
+    },
     "deep-agents-core": {
       "source": "langchain-ai/langchain-skills",
       "sourceType": "github",
@@ -86,10 +91,25 @@
       "sourceType": "github",
       "computedHash": "d1fb6d34d48a645bc5715f91dd5ba176aad87355147e965ad49cfd4a8744d9a7"
     },
+    "shadcn": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "computedHash": "77faba608ea949351d1757e29e6cb726f6ec5937f7595be0593038a7d2d76bb9"
+    },
+    "tanstack-start-best-practices": {
+      "source": "deckardger/tanstack-agent-skills",
+      "sourceType": "github",
+      "computedHash": "c27c53eebac3b0d0913af4760a55f19a29d71a7e6980db6adeb62e8b9a0d0c55"
+    },
     "tdd-workflow": {
       "source": "affaan-m/everything-claude-code",
       "sourceType": "github",
       "computedHash": "b043ab9a253352d5ab49d359cf8f92b9826f6008daf9a9831fd0445c09482df4"
+    },
+    "zustand": {
+      "source": "vercel-labs/json-render",
+      "sourceType": "github",
+      "computedHash": "6743f9b389593b309b8c9ef24c219b7d16d98a8d1034d7d58bbf2fdcaf815b69"
     }
   }
 }

@@ -24,6 +24,9 @@ def ingest_sop_to_vector_store(
     text_parts = [f"# {sop.title}\n"]
 
     for step in sop.steps or []:
+        if not isinstance(step, dict):
+            text_parts.append(f"Step: {step}")
+            continue
         line = f"Step {step.get('step_no', '?')}: {step.get('action', '')}"
         if step.get("responsible"):
             line += f" (담당: {step['responsible']})"
@@ -32,7 +35,10 @@ def ingest_sop_to_vector_store(
         text_parts.append(line)
 
     for item in sop.checklist_items or []:
-        text_parts.append(f"체크: {item.get('text', '')}")
+        if isinstance(item, dict):
+            text_parts.append(f"체크: {item.get('text', '')}")
+        else:
+            text_parts.append(f"체크: {item}")
 
     for caution in sop.cautions or []:
         text_parts.append(f"주의: {caution}")
@@ -43,7 +49,7 @@ def ingest_sop_to_vector_store(
             "source": f"sop/{sop.id}",
             "source_id": sop.id,
             "title": sop.title,
-            "department_id": str(sop.department_id or ""),
+            "department_id": str(sop.department_id) if sop.department_id is not None else "",
             "version": sop.version,
             "doc_type": "sop",
             "uploaded_at": datetime.now(timezone.utc).isoformat(),
@@ -90,8 +96,9 @@ def ingest_documents(
         loader = PyPDFLoader(str(pdf_file))
         docs = loader.load()
         for i, doc in enumerate(docs):
-            doc.metadata.setdefault("source", pdf_file.name)
+            doc.metadata.setdefault("source", str(pdf_file))
             doc.metadata["chunk_index"] = i
+            doc.metadata["doc_type"] = "pdf"
         documents.extend(docs)
 
     # TXT 로딩
@@ -99,8 +106,9 @@ def ingest_documents(
         loader = TextLoader(str(txt_file), encoding="utf-8")
         docs = loader.load()
         for i, doc in enumerate(docs):
-            doc.metadata.setdefault("source", txt_file.name)
+            doc.metadata.setdefault("source", str(txt_file))
             doc.metadata["chunk_index"] = i
+            doc.metadata["doc_type"] = "txt"
         documents.extend(docs)
 
     # DOCX 로딩 (RAG-F01)
@@ -108,8 +116,9 @@ def ingest_documents(
         loader = Docx2txtLoader(str(docx_file))
         docs = loader.load()
         for i, doc in enumerate(docs):
-            doc.metadata.setdefault("source", docx_file.name)
+            doc.metadata.setdefault("source", str(docx_file))
             doc.metadata["chunk_index"] = i
+            doc.metadata["doc_type"] = "docx"
         documents.extend(docs)
 
     if not documents:

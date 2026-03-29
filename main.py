@@ -100,9 +100,23 @@ async def health(db: Session = Depends(get_db)):
 
 @app.get("/metrics", tags=["system"])
 async def metrics():
-    """인메모리 API 메트릭 — 경로별 호출 횟수 및 평균 응답 시간."""
+    """인메모리 API 메트릭 — 경로별 호출 횟수, 평균 응답 시간, LLM 폴백률 (SYS-F74)."""
+    from app.core.cost_monitor import get_usage_summary
     from app.core.middleware import get_metrics_stats
-    return {"circuits": get_all_statuses(), "api": get_metrics_stats()}
+
+    llm_stats = get_usage_summary()
+    total_calls = sum(m["call_count"] for m in llm_stats)
+    total_fallbacks = sum(m["fallback_count"] for m in llm_stats)
+    return {
+        "circuits": get_all_statuses(),
+        "api": get_metrics_stats(),
+        "llm": {
+            "modules": llm_stats,
+            "total_calls": total_calls,
+            "total_fallbacks": total_fallbacks,
+            "fallback_rate_pct": round(total_fallbacks / total_calls * 100, 1) if total_calls else 0.0,
+        },
+    }
 
 
 @app.get("/admin/llm-cost", tags=["admin"])

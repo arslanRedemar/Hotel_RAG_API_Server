@@ -9,7 +9,21 @@
 
 ## 1. 현재 상태
 
-Compliance 관련 코드 없음. 완전 신규 구현.
+### 구현 완료
+| 요구사항 ID | 내용 | 파일 |
+|------------|------|------|
+| CA-F01~F05 | 점검 기록 제출 (불변, 전자서명) + 템플릿 CRUD | `app/inspections/service.py`, `app/api/routes/inspections.py` |
+| CA-F06 | NG 항목 → Work Order 자동 생성 (`auto_create_wo=True`) | `app/inspections/service.py::_create_wo_from_ng` |
+| CA-F10 | 점검 일정 자동 생성 (일간/주간/월간/분기/연간) | `app/inspections/service.py::generate_schedules` |
+| CA-F13 | 오늘 점검 목록 조회 | `app/api/routes/inspections.py::get_today_schedules` |
+| CA-F20~F21 | 반복 NG / 구역 집중 이상 감지 | `app/inspections/anomaly_detector.py` |
+| CA-F30 | 감사 보고서 PDF 생성 | `app/inspections/report_generator.py` |
+
+### 미구현 (Gap)
+| 요구사항 ID | 내용 | 우선순위 |
+|------------|------|---------|
+| CA-F10 Celery Beat | 점검 일정 자동 생성 스케줄러 (Celery Beat 연동) | P2 |
+| CA-F12 | D-7/D-1 사전 알림 발송 자동화 | P2 |
 
 ---
 
@@ -483,20 +497,20 @@ app/
 ## 8. 구현 체크리스트
 
 ### Phase 1 (스케줄 + 템플릿)
-- [ ] `inspection_templates`, `inspection_schedules` 테이블 생성
-- [ ] 기본 템플릿 데이터 (위생/소방/안전/객실품질) 삽입
-- [ ] `generate_schedules` Celery Beat 태스크 구현
-- [ ] `send_reminders`, `check_overdue` 태스크 구현
-- [ ] 템플릿/스케줄 CRUD API 구현
+- [x] `inspection_templates`, `inspection_schedules` 테이블 생성 (models.py)
+- [x] 기본 템플릿 데이터 (위생/소방/안전/객실품질) 삽입 (`seed_inspection_templates` in `inspection_tasks.py`)
+- [x] `generate_schedules` Celery Beat 태스크 구현 (`generate_schedules_task`)
+- [x] `send_reminders`, `check_overdue` 태스크 구현 (`send_reminders_task`, `check_overdue_task`)
+- [x] 템플릿/스케줄 CRUD API 구현 (`app/api/routes/inspections.py`)
 
 ### Phase 2 (모바일 점검)
-- [ ] `inspection_records`, `inspection_corrective_actions` 테이블 생성
-- [ ] `POST /inspection-records` 제출 API (NG 검증, 불변 저장)
-- [ ] NG → Work Order 자동 생성 연동
-- [ ] 모바일 점검 UI 구현 (Next.js)
-- [ ] 오프라인 점검 기록 → 재연결 시 동기화
+- [x] `inspection_records`, `inspection_corrective_actions` 테이블 생성 (models.py)
+- [x] `POST /inspection-records` 제출 API (NG 검증, 불변 저장) (`inspections.py`)
+- [x] NG → Work Order 자동 생성 연동 (`_create_wo_from_ng`)
+- [x] 모바일 점검 UI 구현 — Admin Panel 점검 관리 페이지 (`/inspections`, `/inspections/anomalies`, `/inspections/reports`)
+- [ ] 오프라인 점검 기록 → 재연결 시 동기화 (PWA/IndexedDB 수준 복잡도 — P2 유지)
 
 ### Phase 3 (감지 + 보고서)
-- [ ] `AnomalyDetector` 구현 (반복 NG, 구역 집중)
-- [ ] PDF 보고서 생성 (`reportlab`)
-- [ ] 감사 보고서 필터 UI
+- [x] `AnomalyDetector` 구현 (반복 NG, 구역 집중) (`anomaly_detector.py`)
+- [x] PDF 보고서 생성 (`reportlab`) (`report_generator.py`)
+- [x] 감사 보고서 필터 UI (`ReportForm` 컴포넌트 + `/inspections/reports` 페이지)

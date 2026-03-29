@@ -13,6 +13,8 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+_URL_CACHE_TTL = 300  # 캐시 TTL 5분 (presigned URL 유효 기간보다 짧게)
+
 ALLOWED_MIME: dict[str, str] = {
     "application/pdf": "pdf",
     "text/plain": "txt",
@@ -28,6 +30,8 @@ class FileStorageService:
     def __init__(self, base_path: str | None = None):
         self.base_path = Path(base_path or settings.file_storage_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
+        # key: "storage_key:expires_in" → (url, cached_at)
+        self._url_cache: dict[str, tuple[str, float]] = {}
 
     # ── 업로드 ──────────────────────────────────────────────
 
@@ -58,9 +62,20 @@ class FileStorageService:
     # ── Presigned URL ────────────────────────────────────────
 
     def generate_presigned_url(self, storage_key: str, expires_in: int = 3600) -> str:
-        expire_ts = int(time.time()) + expires_in
+        cache_key = f"{storage_key}:{expires_in}"
+        now = time.time()
+
+        cached = self._url_cache.get(cache_key)
+        if cached is not None:
+            url, cached_at = cached
+            if now - cached_at < _URL_CACHE_TTL:
+                return url
+
+        expire_ts = int(now) + expires_in
         sig = self._sign(storage_key, expire_ts)
-        return f"/api/v1/files/{storage_key}?exp={expire_ts}&sig={sig}"
+        url = f"/api/v1/files/{storage_key}?exp={expire_ts}&sig={sig}"
+        self._url_cache[cache_key] = (url, now)
+        return url
 
     def validate_presigned_url(self, storage_key: str, exp: int, sig: str) -> bool:
         if time.time() > exp:

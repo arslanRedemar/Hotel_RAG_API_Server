@@ -205,3 +205,87 @@ class TestDocumentNewVersion:
             headers=_auth(staff_token),
         )
         assert resp.status_code == 403
+
+
+# ── 문서 버전 변경 시 알림 발송 (RAG-F30~32) ─────────────────
+
+class TestDocumentVersionNotification:
+    """문서 신규 버전 업로드 시 동일 부서 사용자에게 이메일 알림 발송"""
+
+    def test_notify_called_on_version_upload(self, client, manager_token, db, manager_user, test_dept):
+        """버전 업로드 시 notify() 호출 확인"""
+        from app.database.models import Document as DocModel, User
+
+        # 같은 부서에 직원 추가
+        extra = db.query(User).filter_by(email="extra@hotel.com").first()
+        if not extra:
+            from app.auth.password import hash_password
+            extra = User(
+                email="extra@hotel.com",
+                password_hash=hash_password("pass"),
+                name="추가직원",
+                role="staff",
+                department_id=test_dept.id,
+            )
+            db.add(extra)
+            db.commit()
+
+        doc = DocModel(
+            title="알림 테스트 문서",
+            file_type="pdf",
+            storage_key="notify/doc_v1.pdf",
+            department_id=test_dept.id,
+            uploaded_by=manager_user.id,
+            version=1,
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+
+        with patch("app.api.routes.documents.ingest_documents", return_value={"chunk_count": 2, "elapsed_ms": 50}):
+            with patch("app.api.routes.documents.delete_document_chunks", return_value=1):
+                with patch("app.api.routes.documents._save_upload_file", return_value="/tmp/v2.pdf"):
+                    with patch("app.api.routes.documents.notify") as mock_notify:
+                        mock_notify.return_value = {"email": True}
+                        resp = client.post(
+                            f"/api/v1/documents/{doc.id}/versions",
+                            files={"file": ("doc_v2.pdf", _pdf_bytes(), "application/pdf")},
+                            headers=_auth(manager_token),
+                        )
+
+        assert resp.status_code == 200
+        assert mock_notify.called, "버전 변경 시 notify()가 호출되어야 합니다"
+
+    def test_notify_includes_document_title(self, client, manager_token, db, manager_user, test_dept):
+        """notify()에 문서 제목이 포함되어야 함"""
+        from app.database.models import Document as DocModel
+
+        doc = DocModel(
+            title="체크인 절차서",
+            file_type="pdf",
+            storage_key="notify/checkin_v1.pdf",
+            department_id=test_dept.id,
+            uploaded_by=manager_user.id,
+            version=1,
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+
+        with patch("app.api.routes.documents.ingest_documents", return_value={"chunk_count": 2, "elapsed_ms": 50}):
+            with patch("app.api.routes.documents.delete_document_chunks", return_value=1):
+                with patch("app.api.routes.documents._save_upload_file", return_value="/tmp/v2.pdf"):
+                    with patch("app.api.routes.documents.notify") as mock_notify:
+                        mock_notify.return_value = {"email": True}
+                        resp = client.post(
+                            f"/api/v1/documents/{doc.id}/versions",
+                            files={"file": ("checkin_v2.pdf", _pdf_bytes(), "application/pdf")},
+                            headers=_auth(manager_token),
+                        )
+
+        assert resp.status_code == 200
+        call_kwargs = mock_notify.call_args[1] if mock_notify.call_args else {}
+        subject = call_kwargs.get("subject", "")
+        assert "체크인 절차서" in subject or any(
+            "체크인 절차서" in str(a) for a in mock_notify.call_args.args
+        ), f"notify subject에 문서 제목이 없음: {mock_notify.call_args}"

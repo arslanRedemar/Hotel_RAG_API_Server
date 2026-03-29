@@ -190,6 +190,30 @@ def update_category(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+class PhotosAdd(BaseModel):
+    photo_urls: list[str]
+
+
+@router.post("/{wo_id}/photos")
+def add_photos(
+    wo_id: str,
+    body: PhotosAdd,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """사진 URL 추가 — 기존 photo_urls에 append"""
+    from app.database.models import WorkOrder
+    wo = db.query(WorkOrder).filter(WorkOrder.id == wo_id).first()
+    if not wo:
+        raise HTTPException(status_code=404, detail="Work Order를 찾을 수 없습니다")
+
+    existing = list(wo.photo_urls or [])
+    wo.photo_urls = existing + [u for u in body.photo_urls if u not in existing]
+    db.commit()
+    db.refresh(wo)
+    return WorkOrderService(db=db)._wo_to_dict(wo)
+
+
 @router.patch("/{wo_id}/vendor")
 def assign_vendor(
     wo_id: str,

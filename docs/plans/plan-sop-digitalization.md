@@ -683,23 +683,28 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ## 9. 구현 체크리스트
 
 ### Phase 1 (OCR + 추출)
-- [ ] `pytesseract`, `pdf2image`, `PyMuPDF` 의존성 추가
-- [ ] `app/sop/ocr.py` OCRProcessor 구현
-- [ ] `app/sop/extractor.py` SOPExtractor 구현
-- [ ] 스캔 PDF 판별 로직 (`_is_scanned_pdf`) 구현
-- [ ] Dockerfile에 tesseract 시스템 패키지 추가
+- [x] `pytesseract`, `pdf2image`, `PyMuPDF` 의존성 추가
+- [x] `app/sop/ocr.py` OCRProcessor 구현
+- [x] `app/sop/extractor.py` SOPExtractor 구현
+- [x] 스캔 PDF 판별 로직 (`is_scanned_pdf`) 구현
+- [x] Dockerfile에 tesseract 시스템 패키지 추가
 
 ### Phase 2 (API)
-- [ ] `sops` DB 테이블 생성 마이그레이션
-- [ ] `app/sop/service.py` SOPService 구현
-- [ ] `app/api/routes/sops.py` 엔드포인트 구현
-- [ ] `/sops/extract`, `/sops/{id}/publish` 핵심 엔드포인트 우선 구현
+- [x] `sops` DB 테이블 — `app/database/models.py` SOP 모델
+- [x] `app/sop/service.py` SOPService 구현
+- [x] `app/api/routes/sops.py` 엔드포인트 구현
+- [x] `/sops/extract`, `/sops/{id}/publish` 핵심 엔드포인트 구현
 
 ### Phase 3 (에디터 + Export)
-- [ ] Next.js SOP 에디터 페이지 구현
-- [ ] `reportlab` PDF export 구현
-- [ ] Acknowledge 기능 구현
+- [x] Next.js SOP 에디터 페이지 구현
+  - `hotel-ax-admin/src/app/(dashboard)/sops/page.tsx` — 목록 + 업로드
+  - `hotel-ax-admin/src/app/(dashboard)/sops/[id]/page.tsx` — 상세/발행/확인
+  - `hotel-ax-admin/src/components/sops/sop-table.tsx` — 상태 배지 테이블
+  - `hotel-ax-admin/src/app/api/sops/` — Next.js API proxy routes (목록/단건/발행/export/acknowledge)
+  - 사이드바에 "SOP 관리" 메뉴 추가
+- [x] `reportlab` PDF export 구현 (`app/sop/export.py`)
+- [x] Acknowledge 기능 구현 (`SOPAcknowledgement` 모델 + API)
 
 ### Phase 4 (RAG 연동)
-- [ ] `ingest_sop_to_vector_store()` 구현
-- [ ] SOP 버전 교체 시 기존 청크 삭제 처리
+- [x] `ingest_sop_to_vector_store()` 구현 (`app/rag/ingest.py`)
+- [x] SOP 버전 교체 시 기존 청크 삭제 처리 (`delete_document_chunks()`)
