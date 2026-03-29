@@ -2,7 +2,6 @@
 
 from datetime import datetime, timedelta
 
-import pytest
 
 from app.inspections.anomaly_detector import AnomalyDetector
 

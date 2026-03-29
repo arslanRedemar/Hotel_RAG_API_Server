@@ -100,7 +100,7 @@ class TestLocalFirstFallback:
                 mock_rules.return_value = ClassificationResult(
                     category="기타", severity="medium", confidence=0.5
                 )
-                result = classifier.classify("뭔가 이상합니다")
+                classifier.classify("뭔가 이상합니다")
                 mock_llm.assert_called_once()
 
     def test_confidence_threshold_is_configurable(self, classifier):

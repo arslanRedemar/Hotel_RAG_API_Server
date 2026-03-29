@@ -1,6 +1,6 @@
 """Compliance & Audit DB 통합 테스트 (service.py 커버리지 보완)"""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 

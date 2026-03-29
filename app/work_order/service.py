@@ -240,7 +240,6 @@ class WorkOrderService:
         if not self.db:
             return {}
         from app.database.models import WorkOrder
-        from sqlalchemy import func
 
         q = self.db.query(WorkOrder)
         if severity:
