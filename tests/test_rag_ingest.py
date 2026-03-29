@@ -1,8 +1,6 @@
 """RAG 인제스트 모듈 단위 테스트 (TDD)"""
 
-import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 from langchain_core.documents import Document

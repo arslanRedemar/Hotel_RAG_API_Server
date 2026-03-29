@@ -139,6 +139,8 @@ pytest tests/ --cov=app --cov-fail-under=80  # 커버리지 강제
 | `langgraph-fundamentals` | LangGraph StateGraph 패턴 |
 | `langgraph-persistence` | 대화 상태 지속성 (checkpointer) |
 | `langsmith-trace` | LangSmith 트레이싱 |
+| `github-actions-docs` | GitHub Actions 워크플로 작성·보안·트러블슈팅 |
+| `ruff-linting` | ruff 린트 오류 자동 감지 및 수정 |
 
 ## MCP 서버
 

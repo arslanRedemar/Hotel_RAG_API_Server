@@ -3,7 +3,6 @@
 import base64
 import io
 import logging
-from pathlib import Path
 
 import httpx
 import pytesseract
