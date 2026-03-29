@@ -1,7 +1,6 @@
 """RAG 그래프 (LangGraph) 단위 테스트 (TDD)"""
 
 from unittest.mock import MagicMock, patch
-import pytest
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -239,8 +238,6 @@ class TestBuildGraphNodes:
 
     def test_get_graph_is_singleton(self):
         """get_graph()가 동일 인스턴스를 반환하는지 확인"""
-        import app.rag.graph as graph_mod
-        import importlib
 
         from app.rag.graph import get_graph
         # 두 번 호출해도 같은 객체여야 함

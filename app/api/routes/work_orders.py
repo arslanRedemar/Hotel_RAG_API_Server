@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import CurrentUser, get_current_user
+from app.auth.dependencies import get_current_user
 from app.database.connection import get_db
 from app.database.models import User
 from app.work_order.service import VALID_STATUSES, WorkOrderService

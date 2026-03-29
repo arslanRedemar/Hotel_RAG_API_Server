@@ -1,6 +1,5 @@
 """SOP Export 단위 테스트"""
 
-import pytest
 
 from app.sop.export import export_checklist_csv, export_sop_to_pdf
 

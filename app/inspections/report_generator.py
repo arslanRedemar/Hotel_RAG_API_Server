@@ -3,7 +3,6 @@
 import logging
 from datetime import datetime
 from io import BytesIO
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

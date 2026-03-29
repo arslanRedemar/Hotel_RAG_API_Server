@@ -1,9 +1,7 @@
 """SOP OCR 모듈 단위 테스트"""
 
-import io
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 
-import pytest
 from PIL import Image
 
 from app.sop.ocr import OCRProcessor, preprocess_image, extract_structured_text

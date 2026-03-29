@@ -1,7 +1,6 @@
 """문서 관리 API — 업로드/목록/버전관리/삭제 (RAG-F01~04, F30~32)"""
 
 import logging
-import os
 import uuid
 from pathlib import Path
 from typing import Optional

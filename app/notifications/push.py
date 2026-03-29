@@ -23,7 +23,7 @@ def send_push(
         return False
 
     try:
-        from pywebpush import webpush, WebPushException
+        from pywebpush import webpush
         import json
 
         payload = json.dumps({"title": title, "body": body, "url": url, "icon": icon})

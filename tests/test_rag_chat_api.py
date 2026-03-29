@@ -1,9 +1,7 @@
 """RAG 채팅 API 통합 테스트 (TDD)"""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
-from langchain_core.documents import Document
 
 from app.rag.graph import SourceDetail
 

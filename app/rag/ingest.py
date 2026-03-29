@@ -11,7 +11,6 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.core.config import settings
-from app.core.embedding_router import get_embeddings
 from app.rag.vector_store import get_vector_store
 
 logger = logging.getLogger(__name__)

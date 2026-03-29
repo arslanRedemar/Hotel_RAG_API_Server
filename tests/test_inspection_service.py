@@ -1,6 +1,6 @@
 """Compliance & Audit — InspectionService 단위 테스트 (CA-F01~F13)"""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime
 
 import pytest
 
