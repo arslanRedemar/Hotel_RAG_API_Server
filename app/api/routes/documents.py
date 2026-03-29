@@ -116,7 +116,7 @@ def list_documents(
     current_user: User = Depends(get_current_user),
 ):
     """문서 목록 조회 (부서 필터 가능)"""
-    q = db.query(DocModel).filter(DocModel.is_deleted == False)
+    q = db.query(DocModel).filter(DocModel.is_deleted.is_(False))
     if department_id is not None:
         q = q.filter(DocModel.department_id == department_id)
     return q.order_by(DocModel.created_at.desc()).offset(skip).limit(limit).all()

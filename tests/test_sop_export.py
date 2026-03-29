@@ -71,10 +71,10 @@ class TestExportChecklistCSV:
     def test_empty_checklist_returns_header_only(self):
         sop = {**SAMPLE_SOP, "checklist_items": []}
         result = export_checklist_csv(sop)
-        lines = [l for l in result.strip().splitlines() if l]
+        lines = [line for line in result.strip().splitlines() if line]
         assert len(lines) == 1  # 헤더만
 
     def test_row_count_matches_items(self):
         result = export_checklist_csv(SAMPLE_SOP)
-        lines = [l for l in result.strip().splitlines() if l]
+        lines = [line for line in result.strip().splitlines() if line]
         assert len(lines) == 1 + len(SAMPLE_SOP["checklist_items"])  # 헤더 + 항목 수

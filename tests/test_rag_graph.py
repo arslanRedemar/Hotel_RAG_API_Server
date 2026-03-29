@@ -108,7 +108,6 @@ class TestChatFunction:
             chat("my-session-id", "질문")
 
         call_kwargs = mock_graph.invoke.call_args
-        config = call_kwargs[1].get("config", {}) or (call_kwargs[0][1] if len(call_kwargs[0]) > 1 else {})
         assert "my-session-id" in str(call_kwargs)
 
 
@@ -160,9 +159,8 @@ class TestDepartmentFilterRetriever:
         mock_vs.as_retriever.return_value = mock_retriever
 
         with patch("app.rag.graph.get_vector_store", return_value=mock_vs):
-            retriever = _build_retriever(department_ids=[1, 2])
+            _build_retriever(department_ids=[1, 2])
 
-        call_kwargs = mock_vs.as_retriever.call_args[1] or mock_vs.as_retriever.call_args[0][0]
         # filter가 search_kwargs에 포함되어야 함
         assert mock_vs.as_retriever.called
 
@@ -172,7 +170,7 @@ class TestDepartmentFilterRetriever:
         mock_vs.as_retriever.return_value = MagicMock()
 
         with patch("app.rag.graph.get_vector_store", return_value=mock_vs):
-            retriever = _build_retriever(department_ids=None)
+            _build_retriever(department_ids=None)
 
         assert mock_vs.as_retriever.called
 

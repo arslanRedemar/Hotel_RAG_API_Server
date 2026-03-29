@@ -12,8 +12,7 @@ def export_sop_to_pdf(sop: dict) -> bytes:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import cm
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-        from reportlab.lib import colors
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
     except ImportError as e:
         raise RuntimeError("reportlab 미설치. pip install reportlab") from e
 
@@ -27,7 +26,6 @@ def export_sop_to_pdf(sop: dict) -> bytes:
         rightMargin=2.5 * cm,
     )
     styles = getSampleStyleSheet()
-    bold_style = ParagraphStyle("bold", parent=styles["Normal"], fontName="Helvetica-Bold")
     italic_style = ParagraphStyle("italic", parent=styles["Normal"], fontName="Helvetica-Oblique")
     story = []
 

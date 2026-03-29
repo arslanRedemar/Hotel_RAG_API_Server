@@ -43,7 +43,7 @@ class TestAutoAssign:
     def test_assigns_to_available_engineer_by_category(self, assigner, make_engineer):
         engineers = [make_engineer(1, ["전기", "에어컨"])]
         with patch.object(assigner, "_get_candidates", return_value=engineers):
-            with patch.object(assigner, "_notify_assignee") as mock_notify:
+            with patch.object(assigner, "_notify_assignee"):
                 result = assigner.assign(wo_id="wo-1", category="전기", severity="high")
 
         assert result is not None
