@@ -328,27 +328,27 @@ python-multipart>=0.0.9    # 파일 업로드
 ## 8. 구현 우선순위 체크리스트
 
 ### Phase 1 (즉시 시작)
-- [ ] `requirements.txt`에 `python-docx`, `python-jose`, `passlib` 추가
-- [ ] `ingest.py` DOCX 로더 추가
-- [ ] `graph.py` 시스템 프롬프트 Hallucination 방지 강화
-- [ ] `schemas.py` `SourceDocument` 모델 추가
-- [ ] `chat.py` 소스 섹션 정보 반환 개선
-- [ ] 인덱싱 소요 시간 측정 및 반환 (`time.perf_counter`)
+- [x] `requirements.txt`에 `python-docx`, `python-jose`, `passlib` 추가
+- [x] `ingest.py` DOCX 로더 추가 (`Docx2txtLoader`)
+- [x] `graph.py` 시스템 프롬프트 Hallucination 방지 강화 (No-answer 처리)
+- [x] `schemas.py` `SourceDocument` 모델 추가 (source/page/section/chunk_preview)
+- [x] `chat.py` 소스 섹션 정보 반환 개선 (RAG-F11)
+- [x] 인덱싱 소요 시간 측정 및 반환 (`time.perf_counter` → `elapsed_ms`)
 
 ### Phase 2 (Phase 1 완료 후)
-- [ ] `app/auth/` 모듈 생성
-- [ ] `User`, `Department` DB 모델 추가 및 마이그레이션
-- [ ] `/api/v1/auth/login`, `/register` 엔드포인트 구현
-- [ ] 기존 API에 `Depends(get_current_user)` 적용
-- [ ] ChromaDB 부서 필터 적용
+- [x] `app/auth/` 모듈 생성 (jwt.py, dependencies.py, password.py, lockout.py)
+- [x] `User`, `Department` DB 모델 추가 및 마이그레이션
+- [x] `/api/v1/auth/login`, `/register` 엔드포인트 구현
+- [x] 기존 API에 `Depends(get_current_user)` 적용
+- [x] ChromaDB 부서 필터 적용 (graph.py `department_filter`)
 
 ### Phase 3 (Phase 2 완료 후)
-- [ ] `Document`, `DocumentVersion` DB 모델 추가
-- [ ] `/api/v1/documents` CRUD 엔드포인트 구현
-- [ ] 버전 전환 시 ChromaDB 재인덱싱 로직
-- [ ] 변경 알림 발송 연동
+- [x] `Document`, `DocumentVersion` DB 모델 추가
+- [x] `/api/v1/documents` CRUD 엔드포인트 구현 (`documents.py`)
+- [x] 버전 전환 시 ChromaDB 재인덱싱 로직 (`upload_new_version`)
+- [x] 변경 알림 발송 연동 (`_notify_version_update` — 부서 사용자 이메일 발송)
 
 ### Phase 4 (병행 가능)
-- [ ] Next.js 채팅 UI 구현
-- [ ] 문서 관리 페이지 구현
-- [ ] 세션 이력 사이드바 구현
+- [x] Next.js 채팅 UI 구현 (`/chat` 페이지 — ChatWindow, ChatInput)
+- [x] 문서 관리 페이지 구현 (`/documents` 페이지 — 기존 구현)
+- [x] 세션 이력 사이드바 구현 (`SessionSidebar` + `GET /api/v1/history/sessions`)

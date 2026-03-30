@@ -18,6 +18,7 @@ from app.auth.jwt import (
     create_refresh_token,
     verify_refresh_token,
 )
+from app.auth.lockout import is_account_locked, record_failed_login, reset_failed_login
 from app.auth.password import verify_password
 from app.database.connection import get_db
 from app.database.models import User
@@ -61,11 +62,30 @@ class UserResponse(BaseModel):
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter_by(email=body.email, is_active=True).first()
+
+    # SYS-F06: 잠금 상태 확인 (유저가 존재하는 경우에만)
+    if user and is_account_locked(user):
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="계정이 잠금 상태입니다. 30분 후에 다시 시도하세요.",
+        )
+
     if not user or not verify_password(body.password, user.password_hash):
+        # 실패 횟수 증가 (유저가 있을 때만)
+        if user:
+            record_failed_login(db, user)
+            if is_account_locked(user):
+                raise HTTPException(
+                    status_code=status.HTTP_423_LOCKED,
+                    detail="로그인 시도 횟수 초과로 계정이 잠금되었습니다. 30분 후에 다시 시도하세요.",
+                )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="이메일 또는 비밀번호가 올바르지 않습니다",
         )
+
+    # SYS-F06: 성공 시 실패 횟수 초기화
+    reset_failed_login(db, user)
 
     access = create_access_token(user.id, user.email, user.role)
     refresh = create_refresh_token(user.id)

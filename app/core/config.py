@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # ===== RAG 파라미터 =====
     chunk_size: int = 500
     chunk_overlap: int = 50
-    top_k_results: int = 5
+    top_k_results: int = 10
     llm_model: str = "gpt-4o-mini"
     embedding_model: str = "text-embedding-3-small"
 

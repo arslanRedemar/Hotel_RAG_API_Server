@@ -42,11 +42,40 @@ SYSTEM_PROMPT = """\
 class SourceDetail:
     """RAG-F11: 출처 문서 상세 정보"""
     source: str
+    display_name: str = ""          # 사람이 읽기 쉬운 문서명
     page: Optional[int] = None
     section: Optional[str] = None
     chunk_preview: str = ""
     doc_type: Optional[str] = None
     department_id: Optional[str] = None
+
+
+def _readable_label(meta: dict) -> str:
+    """메타데이터에서 사람이 읽기 쉬운 문서 레이블 생성.
+
+    우선순위:
+    1. title 메타데이터 (유효한 경우)
+    2. 파일 경로에서 stem 추출
+    3. source 원본값
+    """
+    from pathlib import Path as _Path
+
+    PLACEHOLDER_TITLES = {"분할 추출 문서", "", None}
+
+    title = meta.get("title")
+    if title and title not in PLACEHOLDER_TITLES:
+        return title
+
+    source = meta.get("source", "")
+    if not source:
+        return "문서"
+
+    # sop/{uuid} → "SOP 문서" (DB 조회 전 기본값)
+    if source.startswith("sop/"):
+        return f"SOP ({source[4:12]}...)"
+
+    # 파일 경로 → 파일명 stem (예: "data/docs/checkin_sop.txt" → "checkin_sop")
+    return _Path(source).stem or source
 
 
 def build_source_detail(doc: Document) -> SourceDetail:
@@ -57,6 +86,7 @@ def build_source_detail(doc: Document) -> SourceDetail:
         preview += "..."
     return SourceDetail(
         source=meta.get("source", ""),
+        display_name=_readable_label(meta),
         page=meta.get("page"),
         section=meta.get("section"),
         chunk_preview=preview,
@@ -70,10 +100,12 @@ def build_source_detail(doc: Document) -> SourceDetail:
 def classify_query_complexity(query: str, retrieved_docs: list[Document]) -> TaskTier:
     """RAG-F17: 쿼리 복잡도 기반 LLM 티어 결정.
 
-    단순 쿼리 (단일 소스 + 짧은 질문) → LOCAL_FIRST (로컬 LLM)
+    단순 쿼리 (단일 소스 + 짧은 질문) → LOCAL_FIRST (로컬 LLM 우선)
     복합 쿼리 (다중 소스 or 긴 질문) → CLOUD_FIRST
+
+    임계값을 100자로 올려 짧은 한국어 질문이 Ollama(미실행 시) 공백 응답 방지.
     """
-    if len(retrieved_docs) <= 1 and len(query) < 50:
+    if len(retrieved_docs) <= 1 and len(query) < 100:
         return TaskTier.LOCAL_FIRST
     return TaskTier.CLOUD_FIRST
 
@@ -81,15 +113,25 @@ def classify_query_complexity(query: str, retrieved_docs: list[Document]) -> Tas
 # ── 검색기 빌더 ───────────────────────────────────────────────
 
 def _build_retriever(department_ids: list[int] | None = None):
-    """RAG-F20~22: 부서 필터 적용 검색기 생성"""
+    """RAG-F20~22: MMR 검색 + 부서 필터 적용 검색기 생성
+
+    P1a: search_type="mmr" — 관련성+다양성 균형으로 동일 청크 중복 제거
+    P1a: fetch_k = top_k * 5 — 후보 풀 확대 후 MMR로 다양성 선별
+    P2:  department_id 필터 — 부서 지정 시 해당 부서 문서만 검색
+    """
     vs = get_vector_store()
-    search_kwargs: dict = {"k": settings.top_k_results}
+    k = settings.top_k_results
+    search_kwargs: dict = {
+        "k": k,
+        "fetch_k": k * 5,      # MMR 후보 풀 (k*5개 후보에서 k개 선별)
+        "lambda_mult": 0.7,    # 관련성 70% + 다양성 30%
+    }
 
     if department_ids:
         dept_strs = [str(d) for d in department_ids]
         search_kwargs["filter"] = {"department_id": {"$in": dept_strs}}
 
-    return vs.as_retriever(search_kwargs=search_kwargs)
+    return vs.as_retriever(search_type="mmr", search_kwargs=search_kwargs)
 
 
 # ── 그래프 빌더 ───────────────────────────────────────────────
@@ -109,19 +151,21 @@ def _build_graph():
     def generate(state: RAGState) -> dict:
         docs = state.get("context", [])
         context_text = "\n\n".join(
-            f"[{doc.metadata.get('source', '문서')}] {doc.page_content}"
+            f"[{_readable_label(doc.metadata or {})}] {doc.page_content}"
             for doc in docs
         )
         system_msg = SystemMessage(
             content=SYSTEM_PROMPT.replace("{context}", context_text or "관련 문서 없음")
         )
 
-        # RAG-F17: 쿼리 복잡도 기반 LLM 선택
+        # RAG-F17: 쿼리 복잡도 기반 LLM 선택 + safe_invoke (Ollama 미실행 시 자동 클라우드 폴백)
         question = state["messages"][-1].content
         tier = classify_query_complexity(question, docs)
-        llm = llm_router.get_llm(tier)
-
-        response = llm.invoke([system_msg] + list(state["messages"]))
+        response = llm_router.safe_invoke(
+            tier,
+            [system_msg] + list(state["messages"]),
+            module="rag",
+        )
         return {"messages": [response]}
 
     graph = StateGraph(RAGState)

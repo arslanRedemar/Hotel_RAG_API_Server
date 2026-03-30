@@ -83,5 +83,11 @@ def export_checklist_csv(sop: dict) -> str:
     writer = csv.writer(buf)
     writer.writerow(["번호", "항목", "필수여부"])
     for i, item in enumerate(sop.get("checklist_items") or [], start=1):
-        writer.writerow([i, item.get("text", ""), "필수" if item.get("required") else "선택"])
+        if isinstance(item, dict):
+            text = item.get("text", "")
+            required = "필수" if item.get("required") else "선택"
+        else:
+            text = str(item)
+            required = "선택"
+        writer.writerow([i, text, required])
     return buf.getvalue()

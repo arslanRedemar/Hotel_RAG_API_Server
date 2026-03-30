@@ -141,6 +141,10 @@ pytest tests/ --cov=app --cov-fail-under=80  # 커버리지 강제
 | `langsmith-trace` | LangSmith 트레이싱 |
 | `github-actions-docs` | GitHub Actions 워크플로 작성·보안·트러블슈팅 |
 | `ruff-linting` | ruff 린트 오류 자동 감지 및 수정 |
+| `clerk-nextjs-patterns` | Clerk 인증 Next.js 패턴 (Admin Panel JWT 인증 구현 참조) |
+| `shadcn` | shadcn/ui 컴포넌트 패턴 (Admin Panel UI 구현 참조) |
+| `tanstack-start-best-practices` | TanStack Start/Query/Router 베스트 프랙티스 (Admin Panel 데이터 페칭·라우팅 참조) |
+| `zustand` | Zustand 전역 상태 관리 패턴 (Admin Panel 필터·선택 상태 관리 참조) |
 
 ## MCP 서버
 

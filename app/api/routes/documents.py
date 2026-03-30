@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.database.connection import get_db
 from app.database.models import Document as DocModel, DocumentVersion, User
 from app.models.schemas import DocumentOut, DocumentUploadResponse
+from app.notifications.service import notify
 from app.rag.ingest import delete_document_chunks, ingest_documents
 
 logger = logging.getLogger(__name__)
@@ -202,4 +203,33 @@ async def upload_new_version(
     doc.storage_key = saved_path
     db.commit()
     db.refresh(doc)
+
+    # RAG-F32: 부서 사용자에게 문서 버전 변경 알림 발송
+    await _notify_version_update(doc, new_version, db)
+
     return doc
+
+
+async def _notify_version_update(doc, new_version: int, db) -> None:
+    """부서 소속 활성 사용자들에게 신규 버전 이메일 알림"""
+    try:
+        dept_users = (
+            db.query(User)
+            .filter(User.department_id == doc.department_id, User.is_active.is_(True))
+            .all()
+        )
+        for user in dept_users:
+            await notify(
+                channel="email",
+                recipient=user.email,
+                subject=f"[문서 업데이트] {doc.title} v{new_version} 게시됨",
+                body=(
+                    f"안녕하세요 {user.name}님,\n\n"
+                    f"'{doc.title}' 문서의 신규 버전(v{new_version})이 등록되었습니다.\n"
+                    "최신 내용을 확인해 주세요."
+                ),
+                user_id=user.id,
+                db=db,
+            )
+    except Exception as exc:
+        logger.warning("버전 변경 알림 발송 실패: %s", exc)

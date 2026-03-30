@@ -595,24 +595,34 @@ app/
 ## 7. 구현 체크리스트
 
 ### Phase 1 (데이터 수집)
-- [ ] `daily_metrics`, `competitor_rates`, `local_events` 테이블 생성
-- [ ] `reservation_pickups` 테이블 생성
-- [ ] `PMSCollector` 구현 (또는 PMS API 미연동 시 수동 입력 API 제공)
-- [ ] 경쟁사 요율 수집 (OTA 스크래핑 또는 외부 서비스 연동)
-- [ ] Celery Beat 스케줄 등록
+- [x] `daily_metrics`, `competitor_rates`, `local_events` 테이블 생성 (`app/database/models.py`)
+- [x] `reservation_pickups` 테이블 생성
+- [x] `PMSCollector` 구현 (`app/revenue/collectors/pms_collector.py`)
+- [x] 경쟁사 요율 수집기 구현 (`app/revenue/collectors/competitor_collector.py`)
+- [x] 이벤트 수집기 구현 (`app/revenue/collectors/event_collector.py`)
+- [x] Celery Beat 스케줄 등록 (`app/tasks/revenue_tasks.py` — 06:00 예측, 08:00 권고)
+- [x] 일간 성과 지표 수동 입력 API `POST /revenue/metrics`
 
 ### Phase 2 (AI 분석)
-- [ ] `demand_forecasts` 테이블 생성
-- [ ] `DemandForecaster` 구현 (초기: 이동평균 + 이벤트 가중치)
-- [ ] `rate_recommendations` 테이블 생성
-- [ ] `RateRecommendationEngine` 구현
+- [x] `demand_forecasts` 테이블 생성
+- [x] `DemandForecaster` 구현 (`app/revenue/demand_forecaster.py` — 이동평균 + 이벤트 가중치 + 계절성)
+- [x] `rate_recommendations` 테이블 생성
+- [x] `RateRecommendationEngine` 구현 (`app/revenue/recommendation_engine.py` — GPT-4o-mini 기반)
+- [x] `generate_forecasts_task` Celery 태스크 (멱등성 보장, DB 주입 가능)
+- [x] `generate_recommendations_task` Celery 태스크
 
 ### Phase 3 (시뮬레이터 + API)
-- [ ] `GroupBookingSimulator` 구현
-- [ ] Revenue API 엔드포인트 구현
-- [ ] 대시보드 UI 구현
+- [x] `GroupBookingSimulator` 구현 (`app/revenue/group_simulator.py` — 수락/거절/협상 권고)
+- [x] Revenue API 엔드포인트 구현 (`app/api/routes/revenue.py`)
+  - [x] `GET /revenue/dashboard` — RevPAR/ADR/점유율/채널믹스 대시보드 (RM-F40)
+  - [x] `GET /revenue/recommendations` — AI 요율 권고 목록 (RM-F20)
+  - [x] `POST /revenue/recommendations/{id}/decide` — 권고 수락/수정/거절 (RM-F21)
+  - [x] `POST /revenue/simulate/group` — 단체 예약 시뮬레이션 (RM-F30)
+  - [x] `GET /revenue/forecast` — 수요 예측 목록 조회 (RM-F10)
+  - [x] `POST /revenue/events` / `GET /revenue/events` — 로컬 이벤트 관리 (RM-F02)
 
 ### Phase 4 (피드백 루프)
-- [ ] AI 권고 수락/거절 결과 추적
-- [ ] 실적 vs 예측 MAPE 계산
-- [ ] 피드백 루프 지표 대시보드
+- [x] AI 권고 수락/거절 결과 추적 (`action_taken`, `decided_by`, `decided_at` 컬럼)
+- [x] 실적 vs 예측 MAPE 계산 (`app/revenue/accuracy_tracker.py` — ForecastAccuracyTracker)
+- [ ] 피드백 루프 지표 대시보드 (Admin UI — 미구현)
+- [x] 테스트 커버리지: 63개 Revenue 테스트 전체 통과 + 전체 482개 통과

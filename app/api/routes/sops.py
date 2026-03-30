@@ -1,6 +1,7 @@
 """SOP 디지털화 REST API (SOP-F01~F32)"""
 
 import logging
+import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -20,6 +21,7 @@ from app.models.schemas import (
 from app.sop.export import export_checklist_csv, export_sop_to_pdf
 from app.sop.service import SOPService
 from app.storage.service import file_storage
+from app.tasks.sop_tasks import extract_sop_task
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,16 @@ async def extract_sop(
     current_user: CurrentUser = CurrentUser,
     db: Session = Depends(get_db),
 ):
-    """SOP 파일 업로드 → OCR → AI 구조 추출 → draft 저장 (SOP-F01, F06, F10)"""
+    """SOP 파일 업로드 → Celery 비동기 처리 enqueue → 즉시 반환 (SOP-F01, F06, F10)
+
+    처리 흐름:
+      1. 파일 저장
+      2. SOP 레코드 생성 (status='processing')
+      3. Celery 태스크 enqueue (OCR + AI 추출)
+      4. 즉시 {sop_id, status:'processing'} 반환
+
+    처리 완료 후 GET /sops/{sop_id}로 status 폴링 가능 (processing → draft)
+    """
     allowed = {"application/pdf", "text/plain",
                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
     if file.content_type not in allowed:
@@ -47,13 +58,24 @@ async def extract_sop(
     file_type = saved["file_type"]
     file_path = str(file_storage.base_path / "sops" / saved["storage_key"].split("/")[-1])
 
-    sop = sop_service.process_upload(
-        db=db,
-        file_path=file_path,
-        file_type=file_type,
+    # SOP 레코드 생성 (processing 상태 — 즉시 DB에 저장)
+    sop = SOP(
+        id=str(uuid.uuid4()),
+        title=file.filename or "처리중",
+        status="processing",
+        version="1.0",
         department_id=department_id,
-        uploaded_by=current_user.id,
+        source_file=file_path,
+        review_required=True,
+        created_by=current_user.id,
+        updated_by=current_user.id,
     )
+    db.add(sop)
+    db.commit()
+    db.refresh(sop)
+
+    # Celery 태스크 enqueue — 비동기 처리 (블로킹 없음)
+    extract_sop_task.delay(sop.id, file_path, file_type, department_id, current_user.id)
 
     return SOPExtractResponse(
         sop_id=sop.id,

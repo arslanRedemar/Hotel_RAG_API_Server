@@ -189,13 +189,10 @@ class TestBuildGraphNodes:
             Document(page_content="체크인은 14시", metadata={"source": "sop.pdf"})
         ]
 
-        mock_llm = MagicMock()
-        mock_llm.invoke.return_value = AIMessage(content="체크인은 14시입니다.")
-
         with patch("app.rag.graph.get_vector_store") as mock_vs:
             mock_vs.return_value.as_retriever.return_value = mock_retriever
             with patch("app.rag.graph.llm_router") as mock_router:
-                mock_router.get_llm.return_value = mock_llm
+                mock_router.safe_invoke.return_value = AIMessage(content="체크인은 14시입니다.")
                 graph = _build_graph()
                 result = graph.invoke(
                     {"messages": [HumanMessage(content="체크인 시간?")], "department_filter": None},
@@ -213,13 +210,10 @@ class TestBuildGraphNodes:
         mock_retriever = MagicMock()
         mock_retriever.invoke.return_value = []
 
-        mock_llm = MagicMock()
-        mock_llm.invoke.return_value = AIMessage(content="답변")
-
         with patch("app.rag.graph.get_vector_store") as mock_vs:
             mock_vs.return_value.as_retriever.return_value = mock_retriever
             with patch("app.rag.graph.llm_router") as mock_router:
-                mock_router.get_llm.return_value = mock_llm
+                mock_router.safe_invoke.return_value = AIMessage(content="답변")
                 graph = _build_graph()
                 graph.invoke(
                     {
