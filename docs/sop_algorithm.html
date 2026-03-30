@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hotel AX — SOP 처리 알고리즘</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', -apple-system, sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    min-height: 100vh;
+  }
+
+  /* ── 헤더 ── */
+  header {
+    background: linear-gradient(135deg, #1a1d2e 0%, #16213e 100%);
+    border-bottom: 1px solid #2d3748;
+    padding: 24px 40px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  header .logo {
+    font-size: 22px;
+    font-weight: 700;
+    color: #7c3aed;
+    letter-spacing: -0.5px;
+  }
+  header .subtitle {
+    font-size: 13px;
+    color: #64748b;
+    margin-top: 2px;
+  }
+  header .badge {
+    margin-left: auto;
+    background: #7c3aed22;
+    border: 1px solid #7c3aed55;
+    color: #a78bfa;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+  }
+
+  /* ── 레이아웃 ── */
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 40px 60px;
+  }
+
+  /* ── 섹션 타이틀 ── */
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #4b5563;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 16px;
+    margin-top: 40px;
+  }
+
+  /* ── 파이프라인 메인 플로우 ── */
+  .pipeline {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .stage {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 160px;
+  }
+
+  .stage-box {
+    width: 140px;
+    background: #1e2130;
+    border: 1.5px solid #2d3748;
+    border-radius: 12px;
+    padding: 14px 12px;
+    text-align: center;
+    position: relative;
+    transition: border-color .2s, box-shadow .2s;
+    cursor: default;
+  }
+  .stage-box:hover {
+    border-color: #7c3aed;
+    box-shadow: 0 0 20px #7c3aed33;
+  }
+
+  .stage-icon {
+    font-size: 22px;
+    margin-bottom: 8px;
+  }
+  .stage-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #e2e8f0;
+    line-height: 1.3;
+  }
+  .stage-sub {
+    font-size: 10px;
+    color: #64748b;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  .stage-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 8px;
+    text-transform: uppercase;
+  }
+  .badge-async { background: #f59e0b22; color: #f59e0b; border: 1px solid #f59e0b44; }
+  .badge-ai    { background: #10b98122; color: #10b981; border: 1px solid #10b98144; }
+  .badge-db    { background: #3b82f622; color: #60a5fa; border: 1px solid #3b82f644; }
+  .badge-rag   { background: #8b5cf622; color: #a78bfa; border: 1px solid #8b5cf644; }
+
+  .arrow {
+    flex: 0 0 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 28px;
+    color: #374151;
+    font-size: 18px;
+  }
+
+  /* ── 상태 머신 ── */
+  .state-machine {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  .state {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #1e2130;
+    border-radius: 8px;
+    padding: 8px 14px;
+    border: 1.5px solid #2d3748;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .state-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .state-processing { border-color: #f59e0b44; }
+  .state-processing .state-dot { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+  .state-draft      { border-color: #3b82f644; }
+  .state-draft .state-dot { background: #3b82f6; }
+  .state-review     { border-color: #8b5cf644; }
+  .state-review .state-dot { background: #8b5cf6; }
+  .state-active     { border-color: #10b98144; }
+  .state-active .state-dot { background: #10b981; box-shadow: 0 0 6px #10b981; }
+  .state-archived   { border-color: #6b728044; }
+  .state-archived .state-dot { background: #6b7280; }
+  .state-failed     { border-color: #ef444444; }
+  .state-failed .state-dot { background: #ef4444; }
+
+  .state-arrow { color: #374151; font-size: 14px; }
+
+  /* ── 2단 그리드 ── */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+  }
+
+  /* ── 카드 ── */
+  .card {
+    background: #1e2130;
+    border: 1.5px solid #2d3748;
+    border-radius: 14px;
+    padding: 20px 22px;
+  }
+  .card-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+  }
+  .icon-purple { background: #7c3aed33; }
+  .icon-green  { background: #10b98133; }
+  .icon-blue   { background: #3b82f633; }
+  .icon-orange { background: #f59e0b33; }
+  .icon-pink   { background: #ec489933; }
+
+  /* ── 트리 플로우 ── */
+  .tree {
+    font-size: 12px;
+    line-height: 1.8;
+    color: #94a3b8;
+  }
+  .tree-root {
+    font-weight: 700;
+    color: #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .tree-branch {
+    padding-left: 16px;
+    border-left: 1.5px solid #2d3748;
+    margin-left: 8px;
+  }
+  .tree-leaf {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 3px 0;
+  }
+  .tree-leaf::before {
+    content: '├─';
+    color: #374151;
+    flex-shrink: 0;
+  }
+  .tree-leaf:last-child::before { content: '└─'; }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .tag-yes   { background: #10b98122; color: #34d399; }
+  .tag-no    { background: #ef444422; color: #f87171; }
+  .tag-local { background: #8b5cf622; color: #c4b5fd; }
+  .tag-cloud { background: #3b82f622; color: #93c5fd; }
+  .tag-info  { background: #1e293b;   color: #64748b; border: 1px solid #334155; }
+  .tag-warn  { background: #f59e0b22; color: #fbbf24; }
+
+  /* ── 신뢰도 게이지 ── */
+  .confidence-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  .conf-item {
+    background: #161824;
+    border-radius: 8px;
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .conf-label {
+    font-size: 10px;
+    color: #64748b;
+    margin-bottom: 6px;
+    line-height: 1.3;
+  }
+  .conf-bar-wrap {
+    height: 4px;
+    background: #2d3748;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+  .conf-bar {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #7c3aed, #10b981);
+  }
+  .conf-val {
+    font-size: 11px;
+    font-weight: 700;
+    color: #e2e8f0;
+  }
+
+  /* ── 우선순위 스택 ── */
+  .priority-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .priority-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #161824;
+    border-radius: 8px;
+    padding: 10px 14px;
+    border-left: 3px solid;
+  }
+  .priority-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+  .p1 { border-left-color: #10b981; }
+  .p1 .priority-num { background: #10b98133; color: #10b981; }
+  .p2 { border-left-color: #3b82f6; }
+  .p2 .priority-num { background: #3b82f633; color: #60a5fa; }
+  .p3 { border-left-color: #f59e0b; }
+  .p3 .priority-num { background: #f59e0b33; color: #fbbf24; }
+
+  .priority-content { flex: 1; }
+  .priority-title { font-size: 12px; font-weight: 600; color: #e2e8f0; }
+  .priority-desc  { font-size: 10px; color: #64748b; margin-top: 2px; }
+  .priority-ex    { font-size: 10px; color: #475569; font-style: italic; margin-top: 1px; }
+
+  /* ── OCR 엔진 카드 ── */
+  .engine-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .engine-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: #161824;
+    border-radius: 8px;
+    border: 1px solid #2d3748;
+  }
+  .engine-icon {
+    font-size: 18px;
+    width: 32px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .engine-name { font-size: 12px; font-weight: 600; color: #e2e8f0; }
+  .engine-detail { font-size: 10px; color: #64748b; margin-top: 2px; }
+  .engine-conf { margin-left: auto; font-size: 11px; font-weight: 700; }
+
+  /* ── 프롬프트 카드 ── */
+  .prompt-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .prompt-card {
+    background: #161824;
+    border-radius: 10px;
+    padding: 14px;
+    border-left: 3px solid;
+  }
+  .prompt-procedure { border-left-color: #7c3aed; }
+  .prompt-checklist { border-left-color: #10b981; }
+  .prompt-manual    { border-left-color: #3b82f6; }
+  .prompt-type { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .prompt-procedure .prompt-type { color: #a78bfa; }
+  .prompt-checklist .prompt-type { color: #34d399; }
+  .prompt-manual    .prompt-type { color: #60a5fa; }
+  .prompt-kw { font-size: 10px; color: #64748b; line-height: 1.8; }
+  .prompt-kw span { display: inline-block; background: #1e2130; border-radius: 3px; padding: 0 5px; margin: 1px; color: #94a3b8; }
+
+  /* ── 메타데이터 필드 ── */
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .meta-item {
+    background: #161824;
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .meta-key { font-size: 10px; color: #64748b; min-width: 100px; font-family: monospace; }
+  .meta-val { font-size: 10px; color: #e2e8f0; }
+
+  /* ── 분기 조건 테이블 ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  th {
+    background: #161824;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1.5px solid #2d3748;
+  }
+  td {
+    padding: 9px 14px;
+    border-bottom: 1px solid #1e2130;
+    color: #94a3b8;
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #1e2130; }
+  td:first-child { color: #e2e8f0; font-weight: 600; }
+  td code {
+    background: #161824;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'Consolas', monospace;
+    font-size: 10px;
+    color: #a78bfa;
+  }
+
+  /* ── 반응형 ── */
+  @media (max-width: 900px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .confidence-grid { grid-template-columns: repeat(3,1fr); }
+    .prompt-grid { grid-template-columns: 1fr; }
+    .container { padding: 20px 16px 40px; }
+  }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #2d3748, transparent);
+    margin: 40px 0 0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">Hotel AX</div>
+    <div class="subtitle">SOP Processing Algorithm Visualization</div>
+  </div>
+  <div class="badge">SOP-F01 ~ F32</div>
+</header>
+
+<div class="container">
+
+  <!-- ══ 1. 메인 파이프라인 ══ -->
+  <div class="section-title">전체 처리 파이프라인</div>
+  <div class="pipeline">
+
+    <div class="stage">
+      <div class="stage-box">
+        <div class="stage-badge badge-db">API</div>
+        <div class="stage-icon">📤</div>
+        <div class="stage-name">파일 업로드</div>
+        <div class="stage-sub">PDF / DOCX / TXT<br>파일 검증 & 저장</div>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="stage-box">
+        <div class="stage-badge badge-db">DB</div>
+        <div class="stage-icon">📋</div>
+        <div class="stage-name">SOP 레코드 생성</div>
+        <div class="stage-sub">status = processing<br>즉시 응답 반환</div>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="stage-box">
+        <div class="stage-badge badge-async">Celery</div>
+        <div class="stage-icon">⚡</div>
+        <div class="stage-name">비동기 태스크 큐</div>
+        <div class="stage-sub">max_retries=3<br>retry_delay=60s</div>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="stage-box">
+        <div class="stage-badge badge-ai">OCR</div>
+        <div class="stage-icon">🔍</div>
+        <div class="stage-name">OCR 추출</div>
+        <div class="stage-sub">스캔 감지 → 엔진 선택<br>confidence 측정</div>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="stage-box">
+        <div class="stage-badge badge-ai">LLM</div>
+        <div class="stage-icon">🤖</div>
+        <div class="stage-name">AI 구조 추출</div>
+        <div class="stage-sub">로컬 우선 → 클라우드<br>폴백 (신뢰도 기반)</div>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="stage-box">
+        <div class="stage-badge badge-db">Draft</div>
+        <div class="stage-icon">📝</div>
+        <div class="stage-name">검토 & 수정</div>
+        <div class="stage-sub">draft → under_review<br>수동 편집 가능</div>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="stage-box">
+        <div class="stage-badge badge-db">Active</div>
+        <div class="stage-icon">✅</div>
+        <div class="stage-name">확정(Publish)</div>
+        <div class="stage-sub">버전 스냅샷<br>RAG 인덱싱 트리거</div>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="stage-box">
+        <div class="stage-badge badge-rag">RAG</div>
+        <div class="stage-icon">🧩</div>
+        <div class="stage-name">벡터 DB 인덱싱</div>
+        <div class="stage-sub">청크 분할<br>ChromaDB 저장</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ 2. SOP 상태 머신 ══ -->
+  <div class="section-title">SOP 상태 머신</div>
+  <div class="state-machine">
+    <div class="state state-processing"><div class="state-dot"></div>processing</div>
+    <div class="state-arrow">→ Celery 완료 →</div>
+    <div class="state state-draft"><div class="state-dot"></div>draft</div>
+    <div class="state-arrow">→ PUT /sops/{id} →</div>
+    <div class="state state-review"><div class="state-dot"></div>under_review</div>
+    <div class="state-arrow">→ POST /publish →</div>
+    <div class="state state-active"><div class="state-dot"></div>active</div>
+    <div class="state-arrow">→ DELETE →</div>
+    <div class="state state-archived"><div class="state-dot"></div>archived</div>
+    <div style="flex-basis:100%; height:0"></div>
+    <div style="padding-left:16px; font-size:11px; color:#4b5563;">예외 발생 시:</div>
+    <div class="state state-failed"><div class="state-dot"></div>failed</div>
+    <div style="font-size:10px; color:#4b5563;">← Celery max_retries 초과 시 최종 상태</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ══ 3. OCR 처리 상세 ══ -->
+  <div class="section-title">OCR 처리 상세</div>
+  <div class="grid-2">
+
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-icon icon-orange">🔍</div>
+        PDF 유형 판별 & 라우팅
+      </div>
+      <div class="tree">
+        <div class="tree-root">📄 PDF 입력</div>
+        <div class="tree-branch">
+          <div class="tree-leaf">
+            <div>
+              <code style="font-size:10px;color:#fbbf24;">is_scanned_pdf()</code>
+              — PyMuPDF로 텍스트 레이어 검사
+            </div>
+          </div>
+          <div class="tree-leaf">
+            <div>
+              추출 텍스트 <strong>&lt; 500자</strong>
+              <span class="tag tag-yes">스캔 PDF</span>
+              → OCR 엔진 파이프라인
+            </div>
+          </div>
+          <div class="tree-leaf">
+            <div>
+              추출 텍스트 <strong>≥ 500자</strong>
+              <span class="tag tag-no">텍스트 PDF</span>
+              → pdfplumber 직접 추출
+              <span class="tag tag-info">confidence 1.0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tree-root" style="margin-top:14px;">🖼 스캔 PDF OCR 파이프라인</div>
+        <div class="tree-branch">
+          <div class="tree-leaf">pdf2image 변환 <span class="tag tag-info">DPI 300</span></div>
+          <div class="tree-leaf">
+            이미지 전처리
+            <span class="tag tag-info">그레이스케일 → 블러 → 이진화 → 기울기보정 → 1.5x 업스케일</span>
+          </div>
+          <div class="tree-leaf">
+            1순위: 로컬 Vision OCR <span class="tag tag-local">Ollama</span>
+            <span class="tag tag-info">conf ≥ threshold → 완료</span>
+          </div>
+          <div class="tree-leaf">
+            2순위: Google Vision API <span class="tag tag-cloud">Cloud</span>
+            <span class="tag tag-info">conf 0.95</span>
+          </div>
+          <div class="tree-leaf">
+            3순위: Tesseract <span class="tag tag-info">kor+eng</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-icon icon-blue">⚙️</div>
+        OCR 엔진 상세
+      </div>
+      <div class="engine-row">
+        <div class="engine-item">
+          <div class="engine-icon">🏠</div>
+          <div>
+            <div class="engine-name">로컬 Vision OCR</div>
+            <div class="engine-detail">Ollama 비전 모델 (deepseek-vl2) · base64 이미지 전송 · /api/chat</div>
+          </div>
+          <div class="engine-conf" style="color:#c4b5fd;">conf: 0.80</div>
+        </div>
+        <div style="text-align:center;font-size:11px;color:#374151;">↓ 실패 or conf &lt; threshold</div>
+        <div class="engine-item">
+          <div class="engine-icon">🌐</div>
+          <div>
+            <div class="engine-name">Google Vision API</div>
+            <div class="engine-detail">DOCUMENT_TEXT_DETECTION · API 키 필요 · 미설정 시 Tesseract 폴백</div>
+          </div>
+          <div class="engine-conf" style="color:#93c5fd;">conf: 0.95</div>
+        </div>
+        <div style="text-align:center;font-size:11px;color:#374151;">↓ API 키 미설정</div>
+        <div class="engine-item">
+          <div class="engine-icon">📖</div>
+          <div>
+            <div class="engine-name">Tesseract OCR</div>
+            <div class="engine-detail">pytesseract · image_to_data · 언어: kor+eng</div>
+          </div>
+          <div class="engine-conf" style="color:#6ee7b7;">conf: 가변</div>
+        </div>
+        <div class="engine-item" style="border-color:#10b98133;">
+          <div class="engine-icon">📄</div>
+          <div>
+            <div class="engine-name">pdfplumber (텍스트 PDF)</div>
+            <div class="engine-detail">텍스트 + 표 구조 추출 · 폴백: pypdf</div>
+          </div>
+          <div class="engine-conf" style="color:#34d399;">conf: 1.00</div>
+        </div>
+        <div class="engine-item" style="border-color:#10b98133;">
+          <div class="engine-icon">📝</div>
+          <div>
+            <div class="engine-name">python-docx (DOCX)</div>
+            <div class="engine-detail">paragraph.text 추출 · 텍스트 레이어 직접 접근</div>
+          </div>
+          <div class="engine-conf" style="color:#34d399;">conf: 1.00</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ══ 4. AI 구조 추출 ══ -->
+  <div class="section-title">AI 구조 추출 엔진</div>
+  <div class="grid-2">
+
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-icon icon-purple">🤖</div>
+        추출 플로우 (SOPExtractor)
+      </div>
+      <div class="tree">
+        <div class="tree-root">extract(full_text)</div>
+        <div class="tree-branch">
+          <div class="tree-leaf">
+            <div>
+              텍스트 길이 <code>&gt; 6000자</code>
+              <span class="tag tag-warn">청크 분할</span>
+              → _extract_chunked()
+            </div>
+          </div>
+          <div class="tree-leaf">
+            <div>
+              <code>detect_document_type()</code> 판별
+              <span class="tag tag-info">procedure / checklist / manual</span>
+            </div>
+          </div>
+          <div class="tree-leaf">
+            <div>
+              1차: 로컬 LLM 추출
+              <span class="tag tag-local">LOCAL_FIRST</span>
+              → _invoke(local_llm, prompt)
+            </div>
+          </div>
+          <div class="tree-leaf">
+            <div>
+              <code>calculate_extraction_confidence()</code>
+              → calc_conf 재계산
+            </div>
+          </div>
+          <div class="tree-leaf">
+            <div>
+              calc_conf <code>&lt; 0.70</code>
+              <span class="tag tag-warn">review_required=True</span>
+            </div>
+          </div>
+          <div class="tree-leaf">
+            <div>
+              review_required=True → 클라우드 재추출
+              <span class="tag tag-cloud">CLOUD</span>
+            </div>
+          </div>
+          <div class="tree-leaf">
+            <div>
+              클라우드 conf <code>&gt;</code> 로컬 conf
+              <span class="tag tag-yes">클라우드 결과 채택</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-icon icon-green">📊</div>
+        신뢰도 계산 알고리즘
+      </div>
+      <div class="confidence-grid">
+        <div class="conf-item">
+          <div class="conf-label">steps ≥ 1</div>
+          <div class="conf-bar-wrap"><div class="conf-bar" style="width:30%"></div></div>
+          <div class="conf-val">+0.30</div>
+        </div>
+        <div class="conf-item">
+          <div class="conf-label">action ≥ 10자 (전체)</div>
+          <div class="conf-bar-wrap"><div class="conf-bar" style="width:20%"></div></div>
+          <div class="conf-val">+0.20</div>
+        </div>
+        <div class="conf-item">
+          <div class="conf-label">checklist 존재</div>
+          <div class="conf-bar-wrap"><div class="conf-bar" style="width:20%"></div></div>
+          <div class="conf-val">+0.20</div>
+        </div>
+        <div class="conf-item">
+          <div class="conf-label">title 원문 포함</div>
+          <div class="conf-bar-wrap"><div class="conf-bar" style="width:20%"></div></div>
+          <div class="conf-val">+0.20</div>
+        </div>
+        <div class="conf-item">
+          <div class="conf-label">커버리지 &gt;30%</div>
+          <div class="conf-bar-wrap"><div class="conf-bar" style="width:10%"></div></div>
+          <div class="conf-val">+0.10</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;font-size:11px;color:#64748b;text-align:center;">
+        합계 <strong style="color:#e2e8f0;">min(누적, 1.0)</strong> · 임계값 0.70 미만 → 클라우드 폴백 트리거
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="card-title" style="margin-bottom:10px;">
+          <div class="card-title-icon icon-blue">📂</div>
+          문서 유형 자동 판별
+        </div>
+        <div class="prompt-grid">
+          <div class="prompt-card prompt-procedure">
+            <div class="prompt-type">Procedure</div>
+            <div class="prompt-kw">
+              <span>step</span><span>절차</span><span>단계</span>
+              <span>①②</span><span>1. 2. 3.</span>
+              <br>proc_count ≥ 3
+            </div>
+          </div>
+          <div class="prompt-card prompt-checklist">
+            <div class="prompt-type">Checklist</div>
+            <div class="prompt-kw">
+              <span>□</span><span>○</span><span>[ ]</span>
+              <span>체크리스트</span><span>점검표</span>
+              <br>check_count &gt; 5 &amp;&amp; &gt; proc
+            </div>
+          </div>
+          <div class="prompt-card prompt-manual">
+            <div class="prompt-type">Manual</div>
+            <div class="prompt-kw">
+              <span style="color:#6b7280;">그 외 모든 경우</span>
+              <br>섹션 구조 기반 추출
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 청크 분할 -->
+  <div style="margin-top:20px;">
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-icon icon-orange">✂️</div>
+        청크 분할 처리 (_extract_chunked) — 6000자 초과 문서
+      </div>
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+        <div style="flex:1;min-width:260px;">
+          <div class="tree">
+            <div class="tree-root">긴 문서 입력 (예: 30,000자)</div>
+            <div class="tree-branch">
+              <div class="tree-leaf">chunk_size=6000, overlap=500 → 청크 생성</div>
+              <div class="tree-leaf">
+                <strong>청크 0</strong>: extract() 재귀 호출
+                <span class="tag tag-warn">제목 추출 시도</span>
+              </div>
+              <div class="tree-leaf">추출 제목 ∉ PLACEHOLDER_TITLES → <span class="tag tag-yes">제목 채택</span></div>
+              <div class="tree-leaf">추출 제목 ∈ PLACEHOLDER_TITLES → <span class="tag tag-no">빈 문자열</span> (태스크에서 폴백)</div>
+              <div class="tree-leaf"><strong>청크 1~N</strong>: steps/checklist/cautions 수집, step_no 재부여</div>
+              <div class="tree-leaf">cautions 중복 제거 (dict.fromkeys)</div>
+              <div class="tree-leaf">review_required=True (항상), extraction_confidence=0.65 (고정)</div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:1;min-width:260px;">
+          <div style="background:#161824;border-radius:10px;padding:14px;border:1px dashed #374151;">
+            <div style="font-size:10px;color:#64748b;margin-bottom:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">
+              PLACEHOLDER_TITLES (거부 목록)
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              <span class="tag tag-no" style="font-size:11px;padding:3px 8px;">"분할 추출 문서"</span>
+              <span class="tag tag-no" style="font-size:11px;padding:3px 8px;">"추출 실패"</span>
+              <span class="tag tag-no" style="font-size:11px;padding:3px 8px;">"처리중"</span>
+              <span class="tag tag-no" style="font-size:11px;padding:3px 8px;">""(빈문자열)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ══ 5. 제목 결정 알고리즘 ══ -->
+  <div class="section-title">제목 결정 알고리즘 (SOP 청킹 핵심)</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-icon icon-pink">🏷️</div>
+        우선순위 3단계 폴백
+      </div>
+      <div class="priority-stack">
+        <div class="priority-item p1">
+          <div class="priority-num">1</div>
+          <div class="priority-content">
+            <div class="priority-title">AI 추출 제목</div>
+            <div class="priority-desc">extractor.extract()가 반환한 title ∉ PLACEHOLDER_TITLES</div>
+            <div class="priority-ex">예: "Routine Cleaning and Deep Cleaning Procedures"</div>
+          </div>
+          <span class="tag tag-yes">최우선</span>
+        </div>
+        <div style="text-align:center;font-size:11px;color:#374151;padding:2px;">↓ AI 실패 or placeholder</div>
+        <div class="priority-item p2">
+          <div class="priority-num">2</div>
+          <div class="priority-content">
+            <div class="priority-title">원본 파일명 stem</div>
+            <div class="priority-desc">업로드 시 sop.title = file.filename으로 저장된 값의 stem</div>
+            <div class="priority-ex">예: "checkin_sop.pdf" → "checkin_sop"</div>
+          </div>
+          <span class="tag tag-cloud">폴백1</span>
+        </div>
+        <div style="text-align:center;font-size:11px;color:#374151;padding:2px;">↓ 원본명도 placeholder</div>
+        <div class="priority-item p3">
+          <div class="priority-num">3</div>
+          <div class="priority-content">
+            <div class="priority-title">저장 경로 stem (최후 수단)</div>
+            <div class="priority-desc">source_file 경로의 파일명 stem (UUID 기반)</div>
+            <div class="priority-ex">예: "data/uploads/sops/abc123.pdf" → "abc123"</div>
+          </div>
+          <span class="tag tag-warn">폴백2</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-icon icon-purple">🧩</div>
+        RAG 인덱싱 — 메타데이터 구조
+      </div>
+      <div class="tree" style="margin-bottom:14px;">
+        <div class="tree-root">ingest_sop_to_vector_store(sop)</div>
+        <div class="tree-branch">
+          <div class="tree-leaf">문서 직렬화: # title → Step N: action → 체크: → 주의:</div>
+          <div class="tree-leaf">RecursiveCharacterTextSplitter (chunk_size / overlap)</div>
+          <div class="tree-leaf">ChromaDB add_documents() → chunk_ids 반환</div>
+          <div class="tree-leaf">sop.chroma_chunk_ids = chunk_ids (DB 업데이트)</div>
+        </div>
+      </div>
+      <div class="meta-grid">
+        <div class="meta-item">
+          <div class="meta-key">source</div>
+          <div class="meta-val" style="color:#a78bfa;">sop/{sop.id}</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-key">source_id</div>
+          <div class="meta-val" style="color:#a78bfa;">sop.id (UUID)</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-key">title</div>
+          <div class="meta-val" style="color:#34d399;">sop.title ← 결정된 제목</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-key">department_id</div>
+          <div class="meta-val">str(sop.department_id)</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-key">version</div>
+          <div class="meta-val">sop.version</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-key">doc_type</div>
+          <div class="meta-val">"sop"</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ══ 6. display_name 결정 (RAG 응답) ══ -->
+  <div class="section-title">RAG 응답 — 출처 display_name 결정</div>
+  <div class="card">
+    <div class="card-title">
+      <div class="card-title-icon icon-green">💬</div>
+      _resolve_display_names() — chat.py
+    </div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
+      <div style="flex:1;min-width:300px;">
+        <div class="tree">
+          <div class="tree-root">source_details 목록 순회</div>
+          <div class="tree-branch">
+            <div class="tree-leaf">
+              <div>
+                <code>source.startswith("sop/")</code>
+                → DB 쿼리: <code>SELECT id, title FROM sops WHERE id IN (...)</code>
+              </div>
+            </div>
+            <div class="tree-leaf">
+              <div>
+                DB title ∉ PLACEHOLDER_TITLES
+                <span class="tag tag-yes">→ DB 제목 사용</span>
+              </div>
+            </div>
+            <div class="tree-leaf">
+              <div>
+                DB title ∈ PLACEHOLDER_TITLES
+                <span class="tag tag-warn">→ "SOP (short-uuid...)"</span>
+              </div>
+            </div>
+            <div class="tree-leaf">
+              <div>
+                파일 경로 (data/docs/...)
+                <span class="tag tag-info">→ Path(source).stem</span>
+                <span style="color:#64748b;">예: "checkin_sop"</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:260px;">
+        <div style="background:#161824;border-radius:10px;padding:16px;">
+          <div style="font-size:10px;color:#64748b;margin-bottom:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;">예시 변환</div>
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:11px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <code style="color:#ef4444;background:#2d1b1b;padding:2px 6px;border-radius:3px;">sop/abb3b2a1-...</code>
+              <span style="color:#374151;">→</span>
+              <span style="color:#34d399;font-weight:600;">"프론트 오피스 운영 SOP"</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <code style="color:#ef4444;background:#2d1b1b;padding:2px 6px;border-radius:3px;">sop/90dbb181-...</code>
+              <span style="color:#374151;">→</span>
+              <span style="color:#34d399;font-weight:600;">"식품 위생 및 개인 청결 SOP"</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <code style="color:#ef4444;background:#2d1b1b;padding:2px 6px;border-radius:3px;">data/docs/checkin_sop.txt</code>
+              <span style="color:#374151;">→</span>
+              <span style="color:#34d399;font-weight:600;">"checkin_sop"</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ══ 7. 분기 조건 요약 테이블 ══ -->
+  <div class="section-title">핵심 분기 조건 요약</div>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table>
+      <thead>
+        <tr>
+          <th>단계</th>
+          <th>조건</th>
+          <th>분기 A</th>
+          <th>분기 B</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>파일 검증</td>
+          <td>content_type 확인</td>
+          <td><span class="tag tag-yes">PDF/DOCX/TXT</span> → 저장 진행</td>
+          <td><span class="tag tag-no">그 외</span> → HTTP 400</td>
+        </tr>
+        <tr>
+          <td>멱등성</td>
+          <td><code>sop.status != "processing"</code></td>
+          <td><span class="tag tag-yes">이미 처리됨</span> → 조기 리턴</td>
+          <td><span class="tag tag-warn">processing</span> → 계속 진행</td>
+        </tr>
+        <tr>
+          <td>PDF 종류</td>
+          <td>텍스트 레이어 < 500자</td>
+          <td><span class="tag tag-warn">스캔</span> → 이미지 OCR</td>
+          <td><span class="tag tag-yes">텍스트</span> → pdfplumber</td>
+        </tr>
+        <tr>
+          <td>OCR 신뢰도</td>
+          <td>local_conf < threshold</td>
+          <td><span class="tag tag-local">로컬</span> → 폴백 필요</td>
+          <td><span class="tag tag-yes">로컬</span> → 결과 사용</td>
+        </tr>
+        <tr>
+          <td>문서 길이</td>
+          <td>text > 6,000자</td>
+          <td><span class="tag tag-warn">청크 분할</span> → _extract_chunked()</td>
+          <td><span class="tag tag-yes">단일 추출</span> → extract()</td>
+        </tr>
+        <tr>
+          <td>LLM 신뢰도</td>
+          <td>calc_conf < 0.70</td>
+          <td><span class="tag tag-cloud">Cloud LLM</span> → 재추출 후 비교</td>
+          <td><span class="tag tag-local">Local LLM</span> → 결과 사용</td>
+        </tr>
+        <tr>
+          <td>제목 품질</td>
+          <td>title ∈ PLACEHOLDER_TITLES</td>
+          <td><span class="tag tag-warn">원본 파일명</span> stem 사용</td>
+          <td><span class="tag tag-yes">AI 추출 제목</span> 사용</td>
+        </tr>
+        <tr>
+          <td>SOP 수정</td>
+          <td>status 확인</td>
+          <td><span class="tag tag-yes">draft/under_review</span> → 수정 허용</td>
+          <td><span class="tag tag-no">active/archived</span> → HTTP 409</td>
+        </tr>
+        <tr>
+          <td>Celery 재시도</td>
+          <td>예외 발생</td>
+          <td><span class="tag tag-warn">retries < 3</span> → 60초 후 재시도</td>
+          <td><span class="tag tag-no">retries = 3</span> → status=failed</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>
